@@ -1,0 +1,52 @@
+.workspace-grid.topology-grid { grid-template-columns: minmax(0, 1fr) 320px; }
+.work-area.topology-work-area { max-width: none; padding: 1.5rem; }
+.device-palette { background: var(--surface); border: 1px solid var(--line); padding: 1rem; border-radius: 6px 6px 0 0; }
+.palette-buttons { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .85rem; }
+.palette-buttons button { cursor: grab; }
+.palette-buttons button:active { cursor: grabbing; }
+.canvas-toolbar { background: var(--surface); border-inline: 1px solid var(--line); padding: .75rem 1rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
+.topology-canvas { height: 620px; min-width: 0; border: 1px solid var(--control); background: var(--bg); }
+.topology-canvas .react-flow { --xy-background-color: var(--bg); --xy-edge-stroke: var(--accent); --xy-edge-stroke-selected: var(--text); --xy-attribution-background-color: var(--surface); --xy-node-boxshadow-hover: none; --xy-node-boxshadow-selected: none; }
+.topology-canvas .react-flow__attribution { font-size: .625rem; color: var(--muted); }
+.topology-canvas .react-flow__attribution a { color: var(--muted); }
+.canvas-empty { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(80%, 340px); text-align: center; pointer-events: none; color: var(--muted); }
+.canvas-empty strong { color: var(--text); }
+.canvas-empty p { font-size: .875rem; margin-top: .5rem; }
+.canvas-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; padding: .75rem 0; color: var(--muted); font-size: .75rem; }
+.physical-device { width: 260px; background: var(--surface); color: var(--text); border: 1px solid var(--control); border-radius: 6px; }
+.physical-device.is-selected { outline: 3px solid var(--accent); outline-offset: 3px; }
+.device-drag { height: 64px; padding: 10px 14px; border-radius: 5px 5px 0 0; background: var(--subtle); cursor: grab; border-bottom: 1px solid var(--control); }
+.device-drag:active { cursor: grabbing; }
+.device-drag strong { display: block; font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-drag > span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-port { position: relative; height: 44px; }
+.device-port + .device-port { border-top: 1px solid var(--line); }
+.device-port .port-row { border: 0; border-radius: 0; height: 44px; width: 100%; padding: 3px 24px; display: flex; align-items: center; gap: 8px; justify-content: space-between; font-weight: 400; }
+.device-port .port-row[aria-pressed="true"] { background: var(--tint); }
+.port-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 12px; }
+.port-speed { font-size: 10px; color: var(--muted); text-align: right; flex-shrink: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.port-speed > span { display: block; font-size: 9px; }
+.topology-canvas .device-port .react-flow__handle { width: 44px; height: 44px; min-width: 44px; border: 0; border-radius: 0; background: transparent; }
+.topology-canvas .device-port .react-flow__handle-right { right: 0; }
+.topology-canvas .device-port .react-flow__handle-left { left: 0; }
+.topology-canvas .device-port .react-flow__handle::after { content: ''; position: absolute; width: 14px; height: 20px; top: 12px; left: 15px; border: 2px solid var(--accent); border-radius: 4px; background: var(--surface); pointer-events: none; }
+.topology-canvas .device-port.occupied .react-flow__handle::after { background: var(--accent); }
+.empty-ports { border: 0; border-radius: 0 0 5px 5px; width: 100%; height: 44px; font-size: 12px; color: var(--accent); }
+.react-flow__node-site { pointer-events: none !important; }
+.site-outline { height: 100%; border: 1px dashed var(--control); border-radius: 8px; background: var(--subtle); opacity: .8; }
+.site-outline > span { position: absolute; top: 10px; left: 16px; color: var(--text); font-size: 12px; font-weight: 600; }
+.topology-canvas .react-flow__edge.selected .react-flow__edge-path { stroke-width: 4; }
+.find-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
+.checkbox-label { display: inline-flex; align-items: center; gap: .65rem; min-height: 44px; font-weight: 400; }
+.checkbox-label input { width: 22px; height: 22px; min-height: 22px; accent-color: var(--accent); }
+.field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .65rem; }
+.editor-tabs { display: flex; gap: .5rem; margin-block: .75rem 1rem; }
+.editor-tabs button[aria-pressed="true"] { background: var(--subtle); border-color: var(--text); }
+.inspector-port-list { display: grid; gap: .35rem; }
+.inspector-port-list button { display: flex; justify-content: space-between; align-items: center; gap: .5rem; width: 100%; text-align: left; }
+.inspector-port-list button > span:last-child { color: var(--muted); font-size: .75rem; }
+.danger-button { color: var(--error); border-color: var(--error); }
+.danger-button:hover { background: var(--error-bg); }
+@media (min-width: 1600px) { .workspace-grid.topology-grid { grid-template-columns: minmax(0, 1fr) 350px; } }
+@media (max-width: 1199px) { .workspace-grid.topology-grid { grid-template-columns: minmax(0, 1fr); } .topology-inspector { border-left: 0; } }
+@media (max-width: 767px) { .work-area.topology-work-area { padding: 1.5rem 1rem; } .topology-canvas { height: 480px; } .canvas-toolbar { padding: .75rem; } .find-fields { grid-template-columns: minmax(0, 1fr); } .field-pair { grid-template-columns: minmax(0, 1fr); } }
