@@ -42,4 +42,7 @@ vite.config.ts.timestamp-*
 
 docs/
 
+.cline/
+
+AGENTS.md
 
