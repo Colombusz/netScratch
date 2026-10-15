@@ -35,3 +35,11 @@ vite.config.ts.timestamp-*
 
 # Codex
 .codex/
+
+.opencode/
+
+.ai-state/
+
+docs/
+
+

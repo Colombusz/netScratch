@@ -30,7 +30,7 @@ export function physicalNodes(devices: Device[], ports: Port[], positions: Proje
       return { id: port.id, type: 'source', position: side, x: side === Position.Right ? DEVICE_WIDTH - 23 : -21, y: 65 + row * 44, width: 44, height: 44 }
     })
     const existing = old.get(device.id)
-    const sameHandles = existing?.handles?.length === handles.length && handles.every((handle, index) => existing?.handles?.[index]?.id === handle.id && existing.handles[index]?.position === handle.position)
+    const sameHandles = existing?.handles?.length === handles.length && handles.every((handle, index) => existing?.handles?.[index]?.id === handle.id && existing?.handles?.[index]?.position === handle.position)
     if (existing?.type === 'device' && sameHandles && existing.position.x === position.x && existing.position.y === position.y && existing.height === height && existing.ariaLabel === `${device.name}, ${device.role}`) return existing
     return { ...existing, id: device.id, type: 'device', position,
       data: existing?.type === 'device' && sameHandles ? existing.data : { deviceId: device.id, portSides: Object.fromEntries(handles.map((handle) => [handle.id!, handle.position])) },
