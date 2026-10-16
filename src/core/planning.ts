@@ -38,7 +38,10 @@ export function applyPlan(project: Project, space: AddressSpace, subnets: Subnet
   const allSubnets = [...project.subnets.filter((s) => s.addressSpaceId !== space.id), ...subnets]
   const errors = validateSubnets(addressSpaces, allSubnets)
   if (errors.length) throw new Error(errors.join('\n'))
-  return projectSchema.parse({ ...project, addressSpaces, subnets: allSubnets, updatedAt: new Date().toISOString() })
+  const remainingIds = new Set(allSubnets.map((subnet) => subnet.id))
+  const removedIds = new Set(project.subnets.filter((subnet) => !remainingIds.has(subnet.id)).map((subnet) => subnet.id))
+  const detach = <T extends { attachedTo?: { entityType: string; id: string } }>(item: T): T => item.attachedTo?.entityType === 'subnet' && removedIds.has(item.attachedTo.id) ? { ...item, attachedTo: undefined } : item
+  return projectSchema.parse({ ...project, addressSpaces, subnets: allSubnets, notes: project.notes.map(detach), checklistItems: project.checklistItems.map(detach), updatedAt: new Date().toISOString() })
 }
 
 export function generatePlan(project: Project, space: AddressSpace, requirements: Requirement[]) {

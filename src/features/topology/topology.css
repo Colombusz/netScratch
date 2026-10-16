@@ -47,6 +47,20 @@
 .inspector-port-list button > span:last-child { color: var(--muted); font-size: .75rem; }
 .danger-button { color: var(--error); border-color: var(--error); }
 .danger-button:hover { background: var(--error-bg); }
+.device-interface-list > li { padding-block: 1rem; border-top: 1px solid var(--line); }
+.device-interface-list .help { margin-block: .4rem .75rem; }
+.vlan-creator { margin-top: 1rem; }
+.logical-node { width: 240px; border: 1px solid var(--control); border-radius: 6px; background: var(--surface); color: var(--text); display: flex; flex-direction: column; }
+.logical-vlan { height: 156px; }
+.logical-subnet { height: 180px; }
+.logical-interface { height: 220px; }
+.logical-node.is-selected { outline: 3px solid var(--focus); outline-offset: 3px; }
+.logical-drag { flex: 1; min-height: 0; padding: .65rem .85rem; cursor: grab; }
+.logical-drag strong, .logical-drag span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logical-drag strong { font-size: .875rem; }
+.logical-drag span { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
+.logical-node > button { margin: 0 .5rem .5rem; }
+.logical-node .react-flow__handle { background: var(--accent); border-color: var(--surface); width: 12px; height: 12px; }
 @media (min-width: 1600px) { .workspace-grid.topology-grid { grid-template-columns: minmax(0, 1fr) 350px; } }
 @media (max-width: 1199px) { .workspace-grid.topology-grid { grid-template-columns: minmax(0, 1fr); } .topology-inspector { border-left: 0; } }
 @media (max-width: 767px) { .work-area.topology-work-area { padding: 1.5rem 1rem; } .topology-canvas { height: 480px; } .canvas-toolbar { padding: .75rem; } .find-fields { grid-template-columns: minmax(0, 1fr); } .field-pair { grid-template-columns: minmax(0, 1fr); } }

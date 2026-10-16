@@ -4,6 +4,7 @@ import type { Device, Link, Port } from '../../core/schema'
 import { useProjectStore } from '../../state/projectStore'
 import { useTopologyUiStore } from '../../state/topologyUiStore'
 import { EditorForm, MediaField, roles, titleCase } from './forms'
+import { DeviceInterfaces } from './DeviceInterfaces'
 
 function PortCreator({ device }: { device: Device }) {
   const [bulk, setBulk] = useState(false)
@@ -83,6 +84,7 @@ function DeviceEditor({ device }: { device: Device }) {
     <PortCreator device={device} />
     <h3 className="mt-6 mb-2">Ports ({ports.length})</h3>
     {ports.length ? <ul className="inspector-port-list">{ports.map((port) => <li key={port.id}><button type="button" onClick={() => select({ kind: 'port', id: port.id })}><span className="address">{port.name}</span><span>{port.speed}</span></button></li>)}</ul> : <p className="help">Add a named port before connecting this device.</p>}
+    <hr /><DeviceInterfaces key={device.id} deviceId={device.id} />
     <hr /><button type="button" className="danger-button" onClick={deleteSelectedDevice}>Delete device</button>
   </>
 }

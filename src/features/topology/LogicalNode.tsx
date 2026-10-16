@@ -1,85 +1,43 @@
-import { memo, useEffect } from 'react'
-import { Handle, Position, useUpdateNodeInternals, type Node } from '@xyflow/react'
-import { useShallow } from 'zustand/react/shallow'
+import { memo } from 'react'
+import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { useProjectStore } from '../../state/projectStore'
 import { useTopologyUiStore } from '../../state/topologyUiStore'
+import type { VlanFlowNode, SubnetFlowNode, InterfaceFlowNode } from './logicalGraph'
 
-type VlanNodeProps = Node<{ vlanId: string; memberCount: number }, 'vlan'>
-type SubnetNodeProps = Node<{ subnetId: string; vlanId: string | null }, 'subnet'>
-type InterfaceNodeProps = Node<{ interfaceId: string; deviceId: string }, 'interface'>
-
-export const VlanNode = memo(function VlanNode({ id, data, selected, style }: VlanNodeProps) {
-  const vlan = useProjectStore((state) => state.project.vlans.find((v) => v.id === data.vlanId))
-  const interfaces = useProjectStore(useShallow((state) => state.project.interfaces.filter((i) => i.vlanId === data.vlanId)))
+export const VlanNode = memo(function VlanNode({ data, selected }: NodeProps<VlanFlowNode>) {
+  const vlan = useProjectStore((state) => state.project.vlans.find((item) => item.id === data.vlanId))
   const select = useTopologyUiStore((state) => state.select)
-  const updateNodeInternals = useUpdateNodeInternals()
-  const handleSignature = interfaces.map((i) => i.id).join(',')
-  useEffect(() => { updateNodeInternals(id) }, [id, handleSignature, updateNodeInternals])
   if (!vlan) return null
-
-  return <div className={`logical-vlan${selected ? ' is-selected' : ''}`} style={style}>
-    <div className="vlan-drag" title="Drag to move this VLAN">
-      <strong>VLAN {vlan.number}</strong>
-      <span>{vlan.name}</span>
-      <span className="vlan-count">{data.memberCount} interface{data.memberCount !== 1 ? 's' : ''}</span>
-    </div>
-    {interfaces.map((iface, index) => (
-      <Handle key={iface.id} id={`iface:${data.vlanId}:${index}`} type="target" position={Position.Right}
-        role="button" tabIndex={0} aria-label={`Connect ${vlan.name} interface ${index + 1}`}
-        onClick={(e) => { e.stopPropagation(); select({ kind: 'interface', id: iface.id }) }}
-        isConnectable={false} />
-    ))}
-    {data.vlanId && interfaces.length === 0 && <div className="vlan-empty">No interfaces in this VLAN</div>}
+  return <div className={`logical-node logical-vlan${selected ? ' is-selected' : ''}`}>
+    <div className="vlan-drag logical-drag"><strong>VLAN {vlan.number}</strong><span title={vlan.name}>{vlan.name}</span><span>{data.memberCount} interfaces</span></div>
+    <button type="button" className="nodrag" onClick={(event) => { event.stopPropagation(); select({ kind: 'vlan', id: vlan.id }) }}>Inspect VLAN {vlan.number}</button>
+    <Handle id="members" type="source" position={Position.Right} isConnectable={false} aria-hidden="true" tabIndex={-1} />
   </div>
 })
 
-export const SubnetNode = memo(function SubnetNode({ data, selected, style }: SubnetNodeProps) {
-  const subnet = useProjectStore((state) => state.project.subnets.find((s) => s.id === data.subnetId))
-  const vlan = subnet?.vlanId ? useProjectStore((state) => state.project.vlans.find((v) => v.id === subnet.vlanId)) : null
+export const SubnetNode = memo(function SubnetNode({ data, selected }: NodeProps<SubnetFlowNode>) {
+  const subnet = useProjectStore((state) => state.project.subnets.find((item) => item.id === data.subnetId))
+  const vlan = useProjectStore((state) => state.project.vlans.find((item) => item.id === subnet?.vlanId))
+  const select = useTopologyUiStore((state) => state.select)
   if (!subnet) return null
-
-  const color = vlan ? `hsl(${(vlan.number * 137) % 360}, 55%, 45%)` : 'var(--accent)'
-
-  return <div className={`logical-subnet${selected ? ' is-selected' : ''}`} style={{ ...style, borderColor: color }}>
-    <div className="subnet-drag" title="Drag to move this subnet">
-      <strong>{subnet.name}</strong>
-      <span className="address">{subnet.cidr}</span>
-      {subnet.gatewayIp && <span className="address">GW: {subnet.gatewayIp}</span>}
-    </div>
-    <Handle id={`vlan:${data.vlanId ?? 'none'}`} type="target" position={Position.Top}
-      isConnectable={false} />
-    <Handle id={`gateway:${data.subnetId}`} type="source" position={Position.Right}
-      role="button" tabIndex={0} aria-label={`Gateway ${subnet.gatewayIp ?? 'none'}`}
-      isConnectable={false} />
+  return <div className={`logical-node logical-subnet${selected ? ' is-selected' : ''}`}>
+    <div className="subnet-drag logical-drag"><strong title={subnet.name}>{subnet.name}</strong><span className="address">{subnet.cidr}</span><span className="address">Gateway: {subnet.gatewayIp ?? 'None'}</span><span>{vlan ? `VLAN ${vlan.number}` : 'No VLAN'}</span></div>
+    <button type="button" className="nodrag" onClick={(event) => { event.stopPropagation(); select({ kind: 'subnet', id: subnet.id }) }}>Inspect subnet</button>
+    <Handle id="membership" type="target" position={Position.Left} isConnectable={false} aria-hidden="true" tabIndex={-1} />
+    <Handle id="members" type="source" position={Position.Right} isConnectable={false} aria-hidden="true" tabIndex={-1} />
   </div>
 })
 
-export const InterfaceNode = memo(function InterfaceNode({ data, selected, style }: InterfaceNodeProps) {
-  const iface = useProjectStore((state) => state.project.interfaces.find((i) => i.id === data.interfaceId))
-  const device = iface ? useProjectStore((state) => state.project.devices.find((d) => d.id === iface.deviceId)) : null
-  const port = iface?.portId ? useProjectStore((state) => state.project.ports.find((p) => p.id === iface.portId)) : null
+export const InterfaceNode = memo(function InterfaceNode({ data, selected }: NodeProps<InterfaceFlowNode>) {
+  const iface = useProjectStore((state) => state.project.interfaces.find((item) => item.id === data.interfaceId))
+  const device = useProjectStore((state) => state.project.devices.find((item) => item.id === iface?.deviceId))
+  const port = useProjectStore((state) => state.project.ports.find((item) => item.id === iface?.portId))
+  const vlan = useProjectStore((state) => state.project.vlans.find((item) => item.id === iface?.vlanId))
+  const select = useTopologyUiStore((state) => state.select)
   if (!iface) return null
-
-  const kindColors: Record<string, string> = {
-    physical: 'var(--accent)',
-    subinterface: '#6366f1',
-    SVI: '#f59e0b',
-    loopback: '#ec4899',
-  }
-  const kindColor = kindColors[iface.kind] ?? 'var(--accent)'
-
-  return <div className={`logical-interface${selected ? ' is-selected' : ''}`} style={style}>
-    <div className="iface-drag" title="Drag to move this interface">
-      <span className="iface-kind" style={{ background: kindColor }}>{iface.kind}</span>
-      <strong>{iface.name}</strong>
-      {device && <span>{device.name}</span>}
-      {port && <span className="address">{port.name}</span>}
-      {iface.address && <span className="address">{iface.address}</span>}
-      {iface.vlanId && <span className="iface-vlan">VLAN</span>}
-    </div>
-    <Handle id={`subnet:${iface.vlanId ?? 'none'}`} type="target" position={Position.Left}
-      isConnectable={false} />
-    <Handle id={`device:${data.deviceId}`} type="target" position={Position.Right}
-      isConnectable={false} />
+  return <div className={`logical-node logical-interface${selected ? ' is-selected' : ''}`}>
+    <div className="iface-drag logical-drag"><strong title={iface.name}>{iface.name}</strong><span>{iface.kind}</span><span title={device?.name}>{device?.name ?? 'Missing device'}</span><span>{port?.name ?? 'No physical port'}</span><span className="address">{iface.address ?? 'Unnumbered'}</span><span>{vlan ? `VLAN ${vlan.number}` : 'No VLAN'}</span></div>
+    <button type="button" className="nodrag" onClick={(event) => { event.stopPropagation(); select({ kind: 'interface', id: iface.id }) }}>Inspect interface</button>
+    <Handle id="membership" type="target" position={Position.Left} isConnectable={false} aria-hidden="true" tabIndex={-1} />
   </div>
 })

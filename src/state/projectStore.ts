@@ -2,9 +2,13 @@ import { create } from 'zustand'
 import { createEmptyProject, projectSchema, type Project } from '../core/schema'
 import * as topology from '../core/topology'
 import * as logical from '../core/logical'
+import * as hardware from '../core/hardware'
+import * as notes from '../core/notes'
 
 type ProjectState = {
   project: Project
+  documentEpoch: number
+  openProject: (project: Project) => void
   replaceProject: (project: Project) => void
   renameProject: (name: string) => void
   addDevice: (details: topology.DeviceDetails, position: topology.Position) => string
@@ -25,10 +29,26 @@ type ProjectState = {
   updateInterface: (id: string, details: logical.InterfaceDetails) => void
   deleteInterface: (id: string) => void
   assignSubnetToVlan: (subnetId: string, vlanId: string | null) => void
+  addHardwareItem: (details: hardware.HardwareItemDetails) => void
+  updateHardwareItem: (id: string, details: hardware.HardwareItemDetails) => void
+  deleteHardwareItem: (id: string) => void
+  addAllocation: (details: hardware.AllocationDetails) => void
+  updateAllocation: (id: string, details: hardware.AllocationDetails) => void
+  deleteAllocation: (id: string) => void
+  addNote: (details: notes.NoteDetails) => void
+  updateNote: (id: string, details: notes.NoteDetails) => void
+  deleteNote: (id: string) => void
+  addChecklistItem: (details: notes.ChecklistDetails) => void
+  updateChecklistItem: (id: string, details: notes.ChecklistDetails) => void
+  setChecklistStatus: (id: string, status: notes.ChecklistDetails['status']) => void
+  deleteChecklistItem: (id: string) => void
+  moveLogicalNodes: (positions: Project['layout']['logical']) => void
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
   project: createEmptyProject(),
+  documentEpoch: 0,
+  openProject: (project) => set((state) => ({ project: projectSchema.parse(project), documentEpoch: state.documentEpoch + 1 })),
   replaceProject: (project) => set({ project: projectSchema.parse(project) }),
   renameProject: (name) => set(({ project }) => ({
     project: projectSchema.parse({ ...project, name, updatedAt: new Date().toISOString() }),
@@ -83,4 +103,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
   updateInterface: (id, details) => set(({ project }) => ({ project: logical.updateInterface(project, id, details) })),
   deleteInterface: (id) => set(({ project }) => ({ project: logical.deleteInterface(project, id) })),
   assignSubnetToVlan: (subnetId, vlanId) => set(({ project }) => ({ project: logical.assignSubnetToVlan(project, subnetId, vlanId) })),
+  addHardwareItem: (details) => set(({ project }) => ({ project: hardware.addHardwareItem(project, details) })),
+  updateHardwareItem: (id, details) => set(({ project }) => ({ project: hardware.updateHardwareItem(project, id, details) })),
+  deleteHardwareItem: (id) => set(({ project }) => ({ project: hardware.deleteHardwareItem(project, id) })),
+  addAllocation: (details) => set(({ project }) => ({ project: hardware.addAllocation(project, details) })),
+  updateAllocation: (id, details) => set(({ project }) => ({ project: hardware.updateAllocation(project, id, details) })),
+  deleteAllocation: (id) => set(({ project }) => ({ project: hardware.deleteAllocation(project, id) })),
+  addNote: (details) => set(({ project }) => ({ project: notes.addNote(project, details) })),
+  updateNote: (id, details) => set(({ project }) => ({ project: notes.updateNote(project, id, details) })),
+  deleteNote: (id) => set(({ project }) => ({ project: notes.deleteNote(project, id) })),
+  addChecklistItem: (details) => set(({ project }) => ({ project: notes.addChecklistItem(project, details) })),
+  updateChecklistItem: (id, details) => set(({ project }) => ({ project: notes.updateChecklistItem(project, id, details) })),
+  setChecklistStatus: (id, status) => set(({ project }) => ({ project: notes.setChecklistStatus(project, id, status) })),
+  deleteChecklistItem: (id) => set(({ project }) => ({ project: notes.deleteChecklistItem(project, id) })),
+  moveLogicalNodes: (positions) => set(({ project }) => ({ project: logical.moveLogicalNodes(project, positions) })),
 }))

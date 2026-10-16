@@ -1,8 +1,8 @@
 import { z } from 'zod'
-import { hardwareItemSchema, allocationSchema, type HardwareItem, type Allocation, type Project, type Device } from './schema'
+import { hardwareItemSchema, allocationDetailsSchema, type HardwareItem, type Allocation, type Project } from './schema'
 
 export const hardwareItemDetailsSchema = hardwareItemSchema.pick({ model: true, category: true, quantityAvailable: true, unitCost: true, portCount: true, capabilities: true })
-export const allocationDetailsSchema = allocationSchema.pick({ hardwareItemId: true, deviceId: true, scope: true, quantity: true })
+export { allocationDetailsSchema }
 
 export type HardwareItemDetails = z.infer<typeof hardwareItemDetailsSchema>
 export type AllocationDetails = z.infer<typeof allocationDetailsSchema>
@@ -39,6 +39,7 @@ export function deleteHardwareItem(project: Project, id: string): Project {
   requireHardwareItem(project, id)
   const allocated = project.allocations.some((a) => a.hardwareItemId === id)
   if (allocated) throw new Error('Cannot delete hardware item: it has active allocations.')
+  if (project.devices.some((device) => device.hardwareItemId === id)) throw new Error('Cannot delete hardware item: it is assigned to a device.')
   return changed(project, {
     hardwareItems: project.hardwareItems.filter((h) => h.id !== id),
     notes: project.notes.map((n) => n.attachedTo?.entityType === 'hardwareItem' && n.attachedTo.id === id ? { ...n, attachedTo: undefined } : n),
@@ -108,10 +109,12 @@ export function getDevicePortDemand(project: Project, deviceId: string) {
   if (!device) return { demand: 0, supply: 0, shortage: false }
   const ports = project.ports.filter((p) => p.deviceId === deviceId)
   const demand = ports.length
-  const allocation = project.allocations.find((a) => a.deviceId === deviceId)
-  const hardwareItem = allocation ? project.hardwareItems.find((h) => h.id === allocation.hardwareItemId) : null
-  const supply = hardwareItem?.portCount ?? 0
-  return { demand, supply, shortage: supply > 0 && demand > supply }
+  const allocations = project.allocations.filter((a) => a.deviceId === deviceId)
+  const supply = allocations.reduce((sum, allocation) => {
+    const item = project.hardwareItems.find((h) => h.id === allocation.hardwareItemId)
+    return sum + (item?.portCount ?? 0) * allocation.quantity
+  }, 0)
+  return { demand, supply, shortage: allocations.length > 0 && demand > supply }
 }
 
 export function validateHardware(project: Project): string[] {
@@ -122,11 +125,9 @@ export function validateHardware(project: Project): string[] {
     if (alloc.deviceId && !project.devices.find((d) => d.id === alloc.deviceId)) {
       errors.push(`Allocation ${alloc.id} references missing device.`)
     }
-    const allAllocs = project.allocations.filter((a) => a.hardwareItemId === item.id)
-    const totalAllocated = allAllocs.reduce((sum, a) => sum + a.quantity, 0)
-    if (totalAllocated > item.quantityAvailable) {
-      errors.push(`Hardware item ${item.model} overallocated: ${totalAllocated} of ${item.quantityAvailable}.`)
-    }
+  }
+  for (const { item, allocatedQty, isShortage } of getHardwareSummary(project).summary) {
+    if (isShortage) errors.push(`Hardware item ${item.model} overallocated: ${allocatedQty} of ${item.quantityAvailable}.`)
   }
   for (const device of project.devices) {
     const { demand, supply, shortage } = getDevicePortDemand(project, device.id)

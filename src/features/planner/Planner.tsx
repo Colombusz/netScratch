@@ -16,10 +16,10 @@ const message = (cause: unknown) => cause instanceof z.ZodError
 export function Planner() {
   const project = useProjectStore((s) => s.project)
   const replaceProject = useProjectStore((s) => s.replaceProject)
-  const [spaceId] = useState(() => crypto.randomUUID())
-  const [parent, setParent] = useState('192.168.10.0/24')
-  const [scope, setScope] = useState('Main site')
-  const [rows, setRows] = useState<DraftRequirement[]>(exampleRows)
+  const [spaceId, setSpaceId] = useState(() => project.addressSpaces[0]?.id ?? crypto.randomUUID())
+  const [parent, setParent] = useState(() => project.addressSpaces[0]?.parentCidr ?? '192.168.10.0/24')
+  const [scope, setScope] = useState(() => project.addressSpaces[0]?.scope ?? 'Main site')
+  const [rows, setRows] = useState<DraftRequirement[]>(() => project.addressSpaces.length ? project.subnets.filter((subnet) => subnet.addressSpaceId === project.addressSpaces[0]!.id && subnet.status === 'allocated').map((subnet) => ({ id: subnet.id, name: subnet.name, hosts: String(subnet.hostRequirement) })) : exampleRows())
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
   const [failures, setFailures] = useState<string[]>([])
@@ -33,7 +33,7 @@ export function Planner() {
   const fixedIds = new Set(subnets.filter((s) => s.source === 'manual' || s.status === 'reserved').map((s) => s.id))
 
   function readSpace(): AddressSpace {
-    return addressSpaceSchema.parse({ id: spaceId, name: 'Primary address space', parentCidr: parseNetwork(parent).cidr, scope })
+    return addressSpaceSchema.parse({ id: spaceId, name: committed?.name ?? 'Primary address space', parentCidr: parseNetwork(parent).cidr, scope })
   }
 
   function updateRow(id: string, values: Partial<DraftRequirement>) {
@@ -112,6 +112,13 @@ export function Planner() {
         <h1>Subnet planner</h1>
         <p>Allocate the largest networks first. Keep room for what comes next.</p>
       </header>
+      {project.addressSpaces.length > 1 && <div className="field"><label htmlFor="edit-address-space">Edit address space</label><select id="edit-address-space" value={spaceId} onChange={(event) => {
+        const space = project.addressSpaces.find((entry) => entry.id === event.target.value)!
+        if ((dirty || editing || committed && (parent !== committed.parentCidr || scope !== committed.scope)) && !window.confirm('Discard pending planner edits and switch address spaces?')) return
+        setSpaceId(space.id); setParent(space.parentCidr); setScope(space.scope)
+        setRows(project.subnets.filter((subnet) => subnet.addressSpaceId === space.id && subnet.status === 'allocated').map((subnet) => ({ id: subnet.id, name: subnet.name, hosts: String(subnet.hostRequirement) })))
+        setDirty(false); setEditing(null); setError(''); setFeedback(''); setFailures([])
+      }}>{project.addressSpaces.map((space) => <option key={space.id} value={space.id}>{space.name} ({space.parentCidr}, {space.scope})</option>)}</select></div>}
       <form onSubmit={generate} noValidate>
         <section className="panel" aria-labelledby="parent-title">
           <h2 id="parent-title">Parent address space</h2>
@@ -125,7 +132,7 @@ export function Planner() {
         </section>
         <section className="panel" aria-labelledby="requirements-title">
           <div className="section-heading"><h2 id="requirements-title">Segment requirements</h2><button type="button" onClick={() => { setRows((current) => [...current, { id: crypto.randomUUID(), name: '', hosts: '' }]); setDirty(true); setFeedback('') }}>Add segment</button></div>
-          <p className="help mb-4">Usable addresses include the gateway. The starting rows use your office example.</p>
+          <p className="help mb-4">Usable addresses include the gateway. {committed ? 'Rows reflect the applied plan; manual subnets stay fixed.' : 'The starting rows use your office example.'}</p>
           <div className="requirements-list">
             {rows.length === 0 && <p className="empty-state">No requirements. Add a segment, or reserve a range below.</p>}
             {rows.map((row, index) => <div className="requirement-row" key={row.id}>

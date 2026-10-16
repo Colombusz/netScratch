@@ -11,7 +11,7 @@ async function readProject(page: Page): Promise<Project> {
 
 async function openTopology(page: Page) {
   await page.goto('/')
-  await page.getByRole('button', { name: '03 Topology', exact: true }).click()
+  await page.getByRole('button', { name: '03 Physical', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Physical topology', exact: true })).toBeVisible()
 }
 
@@ -78,7 +78,7 @@ test('builds and edits a small office using one project document', async ({ page
   expect(project.layout.physical[router.id]).toEqual({ x: 40, y: 60 })
   const beforeNavigation = structuredClone(project)
   await page.getByRole('button', { name: '01 Calculator', exact: true }).click()
-  await page.getByRole('button', { name: '03 Topology', exact: true }).click()
+  await page.getByRole('button', { name: '03 Physical', exact: true }).click()
   expect(await readProject(page)).toEqual(beforeNavigation)
   await page.getByRole('button', { name: 'Close inspector', exact: true }).click()
   await page.getByRole('button', { name: 'Fit view', exact: true }).click()
@@ -124,7 +124,7 @@ test('drags from the palette, moves devices, and connects actual port handles', 
   await expect.poll(async () => (await readProject(page)).layout.physical[router.id]).not.toEqual(before)
   const after = (await readProject(page)).layout.physical[router.id]
   await page.getByRole('button', { name: '02 Planner', exact: true }).click()
-  await page.getByRole('button', { name: '03 Topology', exact: true }).click()
+  await page.getByRole('button', { name: '03 Physical', exact: true }).click()
   expect((await readProject(page)).layout.physical[router.id]).toEqual(after)
 })
 

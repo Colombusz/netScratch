@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, ReactFlowProvider, ConnectionMode, applyNodeChanges, useReactFlow, type NodeChange, type Edge, type NodeTypes } from '@xyflow/react'
 import { useShallow } from 'zustand/react/shallow'
 import { useProjectStore } from '../../state/projectStore'
-import { useTopologyUiStore } from '../../state/topologyUiStore'
+import { useTopologyUiStore, type TopologySelection } from '../../state/topologyUiStore'
 import { VlanNode, SubnetNode, InterfaceNode } from './LogicalNode'
 import { logicalEdges, logicalNodes, type LogicalNode } from './logicalGraph'
 import { errorMessage } from './forms'
+import { VlanCreator } from './VlanCreator'
 import '@xyflow/react/dist/style.css'
 import './topology.css'
 
-const nodeTypes = { vlan: VlanNode, subnet: SubnetNode, interface: InterfaceNode } as unknown as NodeTypes
-const defaultEdgeOptions = { style: { stroke: 'var(--accent)', strokeWidth: 2 }, focusable: true }
+const nodeTypes = { vlan: VlanNode, subnet: SubnetNode, interface: InterfaceNode } satisfies NodeTypes
+const defaultEdgeOptions = { style: { stroke: 'var(--accent)', strokeWidth: 2 }, focusable: false }
 
 function LogicalWorkspace() {
   const { vlans, subnets, interfaces, devices, ports, positions } = useProjectStore(useShallow((state) => ({
@@ -22,15 +23,13 @@ function LogicalWorkspace() {
     positions: state.project.layout.logical,
   })))
   const select = useTopologyUiStore((state) => state.select)
+  const move = useProjectStore((state) => state.moveLogicalNodes)
   const selection = useTopologyUiStore((state) => state.selection)
   const [feedback, setFeedback] = useState('')
   const [nodes, setNodes] = useState<LogicalNode[]>(() => logicalNodes(vlans, subnets, interfaces, positions))
   const flow = useReactFlow<LogicalNode, Edge>()
   const canvas = useRef<HTMLDivElement>(null)
-  const edges = useMemo(() => logicalEdges(vlans, subnets, interfaces, devices, ports).map((edge) => ({
-    ...edge,
-    selected: selection?.kind === 'link' && selection.id === edge.id,
-  })), [vlans, subnets, interfaces, devices, ports, selection])
+  const edges = useMemo(() => logicalEdges(vlans, subnets, interfaces, devices, ports), [vlans, subnets, interfaces, devices, ports])
 
   useEffect(() => {
     setNodes((current) => logicalNodes(vlans, subnets, interfaces, positions, current))
@@ -38,7 +37,9 @@ function LogicalWorkspace() {
 
   const onNodesChange = useCallback((changes: NodeChange<LogicalNode>[]) => {
     setNodes((current) => applyNodeChanges(changes.filter((change) => change.type !== 'remove'), current))
-  }, [])
+    const moved = changes.flatMap((change) => change.type === 'position' && change.position && !change.dragging ? [[change.id, change.position]] : [])
+    if (moved.length) move(Object.fromEntries(moved))
+  }, [move])
 
   function inspectVlan(id: string) {
     if (!id) { select(null); return }
@@ -62,7 +63,8 @@ function LogicalWorkspace() {
     <div className="work-area topology-work-area">
       <header className="page-heading"><p className="section-index">Topology / Logical</p><h1>Logical topology</h1><p>View VLANs, subnets, and their interfaces. VLAN colors indicate membership.</p></header>
       <section className="device-palette" aria-label="Logical palette">
-        <div><h2>VLAN & Interface Management</h2><p className="help">Use the inspector to add VLANs, interfaces, and assign subnets to VLANs.</p></div>
+        <div><h2>VLANs and interfaces</h2><p className="help">Create VLANs here, assign subnets in the inspector, and add interfaces in the Physical workspace.</p></div>
+        <VlanCreator />
       </section>
       <div className="canvas-toolbar">
         <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void flow.fitView({ padding: .15, maxZoom: 1, duration: 0 })}>Fit view</button><button type="button" onClick={() => void flow.zoomIn()}>Zoom in</button><button type="button" onClick={() => void flow.zoomOut()}>Zoom out</button></div>
@@ -71,22 +73,26 @@ function LogicalWorkspace() {
       <div className="topology-canvas" ref={canvas} role="region" aria-label="Logical network canvas">
         <ReactFlow<LogicalNode, Edge> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange}
           isValidConnection={() => false} connectionMode={ConnectionMode.Loose} defaultEdgeOptions={defaultEdgeOptions}
-          onNodeClick={(_, node) => { if (node.type === 'vlan') select({ kind: 'vlan', id: node.data.vlanId }) }}
-          onEdgeClick={(_, edge) => select({ kind: 'link', id: edge.id })} onPaneClick={() => select(null)}
+          onNodeClick={(_, node) => {
+            if (node.type === 'vlan') select({ kind: 'vlan', id: node.data.vlanId })
+            else if (node.type === 'subnet') select({ kind: 'subnet', id: node.data.subnetId })
+            else select({ kind: 'interface', id: node.data.interfaceId })
+          }}
+          onPaneClick={() => select(null)}
           onlyRenderVisibleElements deleteKeyCode={null} minZoom={.1} maxZoom={2}
           onInit={(instance) => { if (nodes.length) void instance.fitView({ padding: .15, maxZoom: 1, duration: 0 }) }}
           nodesDraggable nodesConnectable={false} elementsSelectable snapToGrid snapGrid={[10, 10]}>
-          {!nodes.length && <div className="canvas-empty"><strong>No VLANs yet</strong><p>Add VLANs and interfaces from the inspector to build the logical view.</p></div>}
+          {!nodes.length && <div className="canvas-empty"><strong>No VLANs yet</strong><p>Add a VLAN above, then assign a subnet or add an interface in Physical.</p></div>}
         </ReactFlow>
       </div>
-      <div className="canvas-footer"><span>{vlans.length} VLANs · {subnets.filter(s => s.vlanId).length} subnets assigned · {interfaces.filter(i => i.vlanId).length} interfaces in VLANs</span><span>Drag VLAN/subnet/interface headers to move. Layout is stored separately from physical view.</span></div>
+      <div className="canvas-footer"><span>{vlans.length} VLANs · {subnets.length} subnets · {interfaces.length} interfaces</span><span>Drag headers to move nodes. Positions are saved separately from the physical view.</span></div>
       {feedback && <p role="status" className="notice mt-3">{feedback}</p>}
       <section className="panel topology-tools mt-5" aria-labelledby="logical-tools-title">
         <h2 id="logical-tools-title">Find & inspect</h2>
         <div className="find-fields mt-4"><div className="field"><label htmlFor="find-vlan">Inspect VLAN</label><select id="find-vlan" value={selection?.kind === 'vlan' ? selection.id : ''} onChange={(event) => inspectVlan(event.target.value)}><option value="">Choose a VLAN</option>{vlans.map((vlan) => <option key={vlan.id} value={vlan.id}>VLAN {vlan.number}: {vlan.name}</option>)}</select></div>
-          <div className="field"><label htmlFor="find-subnet">Inspect Subnet</label><select id="find-subnet" value={selection?.kind === 'subnet' ? selection.id : ''} onChange={(event) => inspectSubnet(event.target.value)}><option value="">Choose a subnet</option>{subnets.filter((s) => s.vlanId).map((subnet) => <option key={subnet.id} value={subnet.id}>{subnet.name} ({subnet.cidr})</option>)}</select></div>
-          <div className="field"><label htmlFor="find-interface">Inspect Interface</label><select id="find-interface" value={selection?.kind === 'interface' ? selection.id : ''} onChange={(event) => inspectInterface(event.target.value)}><option value="">Choose an interface</option>{interfaces.filter((i) => i.vlanId).map((iface) => { const dev = devices.find((d) => d.id === iface.deviceId); return <option key={iface.id} value={iface.id}>{dev?.name ?? 'Unknown'} / {iface.name} ({iface.kind})</option>})}</select></div></div>
-        <p className="help mt-3">The logical view shows VLAN→Subnet→Interface→Device relationships. Colors group by VLAN. This view does not simulate routing.</p>
+          <div className="field"><label htmlFor="find-subnet">Inspect Subnet</label><select id="find-subnet" value={selection?.kind === 'subnet' ? selection.id : ''} onChange={(event) => inspectSubnet(event.target.value)}><option value="">Choose a subnet</option>{subnets.map((subnet) => <option key={subnet.id} value={subnet.id}>{subnet.name} ({subnet.cidr})</option>)}</select></div>
+          <div className="field"><label htmlFor="find-interface">Inspect Interface</label><select id="find-interface" value={selection?.kind === 'interface' ? selection.id : ''} onChange={(event) => inspectInterface(event.target.value)}><option value="">Choose an interface</option>{interfaces.map((iface) => { const dev = devices.find((d) => d.id === iface.deviceId); return <option key={iface.id} value={iface.id}>{dev?.name ?? 'Unknown'} / {iface.name} ({iface.kind})</option>})}</select></div></div>
+        <p className="help mt-3">Lines show VLAN membership through an assigned subnet when available. Interface nodes name their device. This view does not simulate routing.</p>
       </section>
     </div>
     <LogicalInspector />
@@ -121,7 +127,7 @@ function LogicalInspector() {
   </aside>
 }
 
-function VlanEditor({ vlan, interfaces, select }: { vlan: { id: string; number: number; name: string }; interfaces: { id: string; name: string; kind: string; vlanId: string | null }[]; select: (s: any) => void }) {
+function VlanEditor({ vlan, interfaces, select }: { vlan: { id: string; number: number; name: string }; interfaces: { id: string; name: string; kind: string; vlanId: string | null }[]; select: (s: TopologySelection) => void }) {
   const [name, setName] = useState(vlan.name)
   const [number, setNumber] = useState(String(vlan.number))
   const [feedback, setFeedback] = useState('')
@@ -150,7 +156,7 @@ function VlanEditor({ vlan, interfaces, select }: { vlan: { id: string; number: 
   </>
 }
 
-function SubnetEditor({ subnet, vlans, select }: { subnet: { id: string; name: string; cidr: string; gatewayIp: string | null; vlanId: string | null }; vlans: { id: string; number: number; name: string }[]; select: (s: any) => void }) {
+function SubnetEditor({ subnet, vlans, select }: { subnet: { id: string; name: string; cidr: string; gatewayIp: string | null; vlanId: string | null }; vlans: { id: string; number: number; name: string }[]; select: (s: TopologySelection) => void }) {
   const [vlanId, setVlanId] = useState(subnet.vlanId ?? '')
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
@@ -159,18 +165,17 @@ function SubnetEditor({ subnet, vlans, select }: { subnet: { id: string; name: s
   return <>
     <form onSubmit={(e) => { e.preventDefault(); try { assignSubnetToVlan(subnet.id, vlanId || null); setFeedback('Subnet VLAN assignment updated.'); setError('') } catch (cause) { setError(errorMessage(cause)) } }}>
       <div className="field"><label htmlFor="subnet-vlan">Assign to VLAN</label><select id="subnet-vlan" value={vlanId} onChange={(e) => setVlanId(e.target.value)}><option value="">No VLAN (Layer 3 only)</option>{vlans.map((v) => <option key={v.id} value={v.id}>VLAN {v.number}: {v.name}</option>)}</select></div>
-      <p className="help mb-3">{subnet.name} — {subnet.cidr} — GW: {subnet.gatewayIp ?? 'none'}</p>
+      <p className="help mb-3">{subnet.name}: {subnet.cidr}. Gateway: {subnet.gatewayIp ?? 'none'}.</p>
       {error && <p className="error mb-4" role="alert">{error}</p>}
       <div className="flex flex-wrap gap-2"><button type="submit" className="primary">Apply</button><button type="button" onClick={() => select(null)}>Cancel</button></div>
     </form>
     {feedback && <p role="status" className="notice mt-4">{feedback}</p>}
     <hr />
-    <h3>Subnet actions</h3>
-    <button type="button" onClick={() => select({ kind: 'subnet', id: subnet.id })}>Open in planner</button>
+    <p className="help">Edit the CIDR, gateway, and host requirement in the Planner workspace.</p>
   </>
 }
 
-function InterfaceEditor({ iface, devices, ports, vlans, select }: { iface: { id: string; deviceId: string; kind: 'physical' | 'subinterface' | 'SVI' | 'loopback'; name: string; portId: string | null; vlanId: string | null; address: string | null }; devices: { id: string; name: string }[]; ports: { id: string; deviceId: string; name: string }[]; vlans: { id: string; number: number; name: string }[]; select: (s: any) => void }) {
+function InterfaceEditor({ iface, devices, ports, vlans, select }: { iface: { id: string; deviceId: string; kind: 'physical' | 'subinterface' | 'SVI' | 'loopback'; name: string; portId: string | null; vlanId: string | null; address: string | null }; devices: { id: string; name: string }[]; ports: { id: string; deviceId: string; name: string }[]; vlans: { id: string; number: number; name: string }[]; select: (s: TopologySelection) => void }) {
   const [kind, setKind] = useState(iface.kind)
   const [name, setName] = useState(iface.name)
   const [portId, setPortId] = useState(iface.portId ?? '')

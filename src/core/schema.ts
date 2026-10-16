@@ -44,9 +44,10 @@ export const hardwareItemSchema = z.strictObject({
   id, model: name, category: name, quantityAvailable: nonnegativeInt,
   unitCost: z.number().nonnegative(), portCount: nonnegativeInt, capabilities: z.array(z.string()),
 })
-export const allocationSchema = z.strictObject({
-  id, hardwareItemId: id, deviceId: optionalId, scope: name.nullable(), quantity: z.number().int().positive(),
+export const allocationDetailsSchema = z.strictObject({
+  hardwareItemId: id, deviceId: optionalId, scope: name.nullable(), quantity: z.number().int().positive(),
 }).refine((a) => (a.deviceId === null) !== (a.scope === null), 'Assign hardware to either a device or a scope.')
+export const allocationSchema = allocationDetailsSchema.safeExtend({ id })
 export const attachmentSchema = z.strictObject({
   entityType: z.enum(['project', 'addressSpace', 'vlan', 'subnet', 'device', 'port', 'interface', 'link', 'hardwareItem', 'allocation', 'note', 'checklistItem']),
   id,

@@ -1,0 +1,12 @@
+.inventory-editor h2 { margin-bottom: 1rem; }
+.inventory-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+.inventory-actions { display: flex; gap: .5rem; }
+.inventory-secondary { display: block; color: var(--muted); font-size: .75rem; font-weight: 400; margin-top: .2rem; }
+.inventory-shortage { color: var(--error); font-weight: 650; }
+.inventory-totals { display: flex; flex-wrap: wrap; gap: 1rem 2rem; margin: 1rem 0 .5rem; font-size: .875rem; }
+.inventory-totals > div { display: flex; gap: .75rem; align-items: baseline; }
+.inventory-totals dt { color: var(--muted); }
+.inventory-totals dd { font-weight: 650; font-variant-numeric: tabular-nums; }
+.inventory-workspace td { font-variant-numeric: tabular-nums; }
+.inventory-workspace button:active { filter: brightness(.9); }
+@media (max-width: 599px) { .inventory-fields { grid-template-columns: minmax(0, 1fr); } }

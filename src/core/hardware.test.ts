@@ -3,14 +3,19 @@ import {
   addHardwareItem,
   deleteHardwareItem,
   updateHardwareItem,
-  addAllocation,
+  addAllocation as allocate,
   updateAllocation,
   deleteAllocation,
   getHardwareSummary,
   getDevicePortDemand,
   validateHardware,
 } from './hardware'
-import { createEmptyProject, type Project, type HardwareItem, type Allocation } from './schema'
+import { createEmptyProject, projectSchema, type Project, type HardwareItem } from './schema'
+
+function addAllocation(project: Project, input: Parameters<typeof allocate>[1]) {
+  const next = allocate(project, input)
+  return { project: next, allocation: next.allocations.at(-1)! }
+}
 
 function makeProject(): Project {
   let project = createEmptyProject()
@@ -97,7 +102,7 @@ describe('hardware inventory transactions', () => {
     const { project: p2 } = addAllocation(p1, { hardwareItemId: hardware.id, deviceId: 'router1', scope: null, quantity: 1 })
     expect(() => deleteHardwareItem(p2, hardware.id)).toThrow('active allocations')
   })
-it('adds allocations to device or scope', () => {
+  it('adds allocations to device or scope', () => {
     let project = makeProject()
     const { project: p1, hardware } = addRouterHardware(project)
     const { project: p2, allocation: a1 } = addAllocation(p1, { hardwareItemId: hardware.id, deviceId: 'router1', scope: null, quantity: 1 })
@@ -140,7 +145,7 @@ it('adds allocations to device or scope', () => {
     let project = makeProject()
     const { project: p1, hardware } = addRouterHardware(project)
     const { project: p2, allocation } = addAllocation(p1, { hardwareItemId: hardware.id, deviceId: 'router1', scope: null, quantity: 1 })
-    const withNotes = {
+    const withNotes: Project = {
       ...p2,
       notes: [
         { id: 'n1', text: 'Hardware note', attachedTo: { entityType: 'hardwareItem' as const, id: hardware.id } },
@@ -153,16 +158,16 @@ it('adds allocations to device or scope', () => {
         { id: 'c3', task: 'Standalone', status: 'done' },
       ],
     }
-    const deletedHw = deleteHardwareItem(withNotes, hardware.id)
+    const deletedAlloc = deleteAllocation(withNotes, allocation.id)
+    expect(deletedAlloc.notes.find((n) => n.id === 'n2')?.attachedTo).toBeUndefined()
+    expect(deletedAlloc.checklistItems.find((c) => c.id === 'c2')?.attachedTo).toBeUndefined()
+    expect(deletedAlloc.notes.find((n) => n.id === 'n1')?.attachedTo?.id).toBe(hardware.id)
+    const deletedHw = deleteHardwareItem(deletedAlloc, hardware.id)
     expect(deletedHw.hardwareItems).toHaveLength(0)
     expect(deletedHw.notes.find((n) => n.id === 'n1')?.attachedTo).toBeUndefined()
     expect(deletedHw.checklistItems.find((c) => c.id === 'c1')?.attachedTo).toBeUndefined()
-    expect(deletedHw.notes.find((n) => n.id === 'n2')?.attachedTo?.id).toBe(allocation.id)
-    expect(deletedHw.checklistItems.find((c) => c.id === 'c2')?.attachedTo?.id).toBe(allocation.id)
-
-    const deletedAlloc = deleteAllocation(deletedHw, allocation.id)
-    expect(deletedAlloc.notes.find((n) => n.id === 'n2')?.attachedTo).toBeUndefined()
-    expect(deletedAlloc.checklistItems.find((c) => c.id === 'c2')?.attachedTo).toBeUndefined()
+    expect(deletedHw.notes.find((n) => n.id === 'n3')?.text).toBe('Standalone note')
+    expect(deletedHw.checklistItems.find((c) => c.id === 'c3')?.task).toBe('Standalone')
   })
 })
 describe('hardware summary and validation', () => {
@@ -200,7 +205,7 @@ describe('hardware summary and validation', () => {
     const { project: p1, hardware } = addRouterHardware(project)
     const { project: p2 } = addAllocation(p1, { hardwareItemId: hardware.id, deviceId: 'router1', scope: null, quantity: 3 })
     const summary = getHardwareSummary(p2)
-    expect(summary.summary[0].isShortage).toBe(true)
+    expect(summary.summary[0]!.isShortage).toBe(true)
     expect(summary.hasShortages).toBe(true)
   })
 
@@ -235,7 +240,7 @@ describe('hardware summary and validation', () => {
     let project = makeProject()
     const { project: p1, hardware } = addRouterHardware(project)
     const { project: p2 } = addAllocation(p1, { hardwareItemId: hardware.id, deviceId: 'router1', scope: null, quantity: 3 })
-    p2.ports = Array.from({ length: 5 }, (_, i) => ({
+    p2.ports = Array.from({ length: 13 }, (_, i) => ({
       id: `p${i}`, deviceId: 'router1', name: `Gi0/${i}`, speed: '1 Gbps', media: 'copper', mode: 'routed', accessVlanId: null, trunkVlanIds: [],
     }))
     const errors = validateHardware(p2)
@@ -252,4 +257,72 @@ describe('hardware summary and validation', () => {
     expect(errors).toContainEqual(expect.stringContaining('missing device'))
   })
 })
+
+describe('hardware transaction boundaries', () => {
+  it('rejects invalid stock and allocation changes without mutating the document', () => {
+    const { project, hardware } = addRouterHardware(makeProject())
+    const snapshot = structuredClone(project)
+    const { id: hardwareId, ...details } = hardware
+    for (const quantityAvailable of [-1, 1.5, NaN, Infinity]) {
+      expect(() => updateHardwareItem(project, hardwareId, { ...details, quantityAvailable })).toThrow()
+    }
+    for (const quantity of [0, -1, 1.5, NaN, Infinity]) {
+      expect(() => allocate(project, { hardwareItemId: hardware.id, deviceId: null, scope: 'HQ', quantity })).toThrow()
+    }
+    expect(() => deleteHardwareItem(project, 'missing')).toThrow('no longer exists')
+    expect(() => deleteAllocation(project, 'missing')).toThrow('no longer exists')
+    expect(() => updateAllocation(project, 'missing', { hardwareItemId: hardware.id, deviceId: null, scope: 'HQ', quantity: 1 })).toThrow('no longer exists')
+    expect(project).toEqual(snapshot)
+  })
+
+  it('moves an allocation between models, devices, and scopes with a stable ID', () => {
+    const { project: p1, hardware: router } = addRouterHardware(makeProject())
+    const { project: p2, hardware: sw } = addSwitchHardware(p1)
+    const { project: p3, allocation } = addAllocation(p2, { hardwareItemId: router.id, deviceId: 'router1', scope: null, quantity: 1 })
+    const input = { hardwareItemId: sw.id, deviceId: null, scope: 'Branch', quantity: 4 }
+    const moved = updateAllocation(p3, allocation.id, input)
+    expect(moved.allocations[0]).toEqual({ id: allocation.id, ...input })
+    expect(projectSchema.safeParse(moved).success).toBe(true)
+    expect(() => updateAllocation(moved, allocation.id, { ...input, hardwareItemId: 'missing' })).toThrow('Hardware item not found')
+    expect(() => updateAllocation(moved, allocation.id, { ...input, deviceId: 'missing', scope: null })).toThrow('Device not found')
+    const back = updateAllocation(moved, allocation.id, { ...input, deviceId: 'router1', scope: null })
+    expect(back.allocations[0]?.scope).toBeNull()
+  })
+
+  it('protects direct device model references on deletion', () => {
+    const { project, hardware } = addRouterHardware(makeProject())
+    project.devices[0]!.hardwareItemId = hardware.id
+    expect(() => deleteHardwareItem(project, hardware.id)).toThrow('assigned to a device')
+  })
+
+  it('sums quantities and every allocation for device port capacity, excluding site stock', () => {
+    const { project: p1, hardware: router } = addRouterHardware(makeProject())
+    const { project: p2, hardware: sw } = addSwitchHardware(p1)
+    let { project } = addAllocation(p2, { hardwareItemId: router.id, deviceId: 'router1', scope: null, quantity: 2 })
+    project = allocate(project, { hardwareItemId: sw.id, deviceId: 'router1', scope: null, quantity: 1 })
+    project = allocate(project, { hardwareItemId: sw.id, deviceId: null, scope: 'HQ', quantity: 3 })
+    expect(getDevicePortDemand(project, 'router1')).toEqual({ demand: 0, supply: 32, shortage: false })
+    expect(getDevicePortDemand(project, 'missing')).toEqual({ demand: 0, supply: 0, shortage: false })
+    expect(validateHardware(project)).toEqual([])
+  })
+
+  it('distinguishes unassigned hardware from allocated hardware with zero ports', () => {
+    const { project, hardware } = addRouterHardware(makeProject())
+    project.ports.push({ id: 'port1', deviceId: 'router1', name: 'eth0', speed: '', media: 'copper', mode: 'unused', accessVlanId: null, trunkVlanIds: [] })
+    expect(getDevicePortDemand(project, 'router1')).toEqual({ demand: 1, supply: 0, shortage: false })
+    const allocated = allocate(project, { hardwareItemId: hardware.id, deviceId: 'router1', scope: null, quantity: 1 })
+    allocated.hardwareItems[0]!.portCount = 0
+    expect(getDevicePortDemand(allocated, 'router1')).toEqual({ demand: 1, supply: 0, shortage: true })
+    allocated.hardwareItems = []
+    expect(getDevicePortDemand(allocated, 'router1').supply).toBe(0)
+    expect(validateHardware(allocated)).toContainEqual(expect.stringContaining('missing hardware item'))
+  })
+
+  it('reports each stock shortage once across several allocations', () => {
+    const { project, hardware } = addRouterHardware(makeProject())
+    const p1 = allocate(project, { hardwareItemId: hardware.id, deviceId: null, scope: 'HQ', quantity: 2 })
+    const p2 = allocate(p1, { hardwareItemId: hardware.id, deviceId: null, scope: 'Branch', quantity: 1 })
+    expect(validateHardware(p2).filter((issue) => issue.includes('overallocated'))).toHaveLength(1)
+    expect(getHardwareSummary(createEmptyProject())).toEqual({ summary: [], totalBudget: 0, totalAllocatedCost: 0, hasShortages: false })
+  })
 })

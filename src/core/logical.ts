@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { parseNetwork } from './cidr'
-import { interfaceAddressSchema, type Vlan, type Interface, type Subnet, type Project } from './schema'
+import { parseCidr } from './cidr'
+import { interfaceAddressSchema, projectSchema, type Vlan, type Interface, type Subnet, type Project } from './schema'
 
 const name = z.string().trim().min(1)
 
@@ -77,13 +77,14 @@ export function deleteVlan(project: Project, id: string): Project {
   if (attachedInterfaces.length > 0) throw new Error(`Cannot delete VLAN: ${attachedInterfaces.length} interface(s) still reference it.`)
   const attachedSubnets = project.subnets.filter((s) => s.vlanId === id)
   if (attachedSubnets.length > 0) throw new Error(`Cannot delete VLAN: ${attachedSubnets.length} subnet(s) still reference it.`)
+  if (project.ports.some((port) => port.accessVlanId === id || port.trunkVlanIds.includes(id))) throw new Error('Cannot delete VLAN: ports still reference it as an access or trunk VLAN.')
   return changed(project, {
     vlans: project.vlans.filter((v) => v.id !== id),
     subnets: project.subnets.map((s) => s.vlanId === id ? { ...s, vlanId: null } : s),
     interfaces: project.interfaces.map((i) => i.vlanId === id ? { ...i, vlanId: null } : i),
     notes: project.notes.map((n) => n.attachedTo?.entityType === 'vlan' && n.attachedTo.id === id ? { ...n, attachedTo: undefined } : n),
     checklistItems: project.checklistItems.map((c) => c.attachedTo?.entityType === 'vlan' && c.attachedTo.id === id ? { ...c, attachedTo: undefined } : c),
-    layout: { ...project.layout, logical: Object.fromEntries(Object.entries(project.layout.logical).filter(([id]) => id !== `vlan:${id}`)) },
+    layout: { ...project.layout, logical: Object.fromEntries(Object.entries(project.layout.logical).filter(([key]) => key !== `vlan:${id}`)) },
   })
 }
 
@@ -99,7 +100,7 @@ export function addInterface(project: Project, deviceId: string, input: Interfac
   }
   if (details.vlanId && !project.vlans.some((v) => v.id === details.vlanId)) throw new Error('VLAN not found.')
   if (details.address) {
-    parseNetwork(details.address)
+    parseCidr(details.address)
   }
   const iface: Interface = { id: crypto.randomUUID(), deviceId, ...details }
   return changed(project, { interfaces: [...project.interfaces, iface] })
@@ -117,7 +118,7 @@ export function updateInterface(project: Project, id: string, input: InterfaceDe
   }
   if (details.vlanId && !project.vlans.some((v) => v.id === details.vlanId)) throw new Error('VLAN not found.')
   if (details.address) {
-    parseNetwork(details.address)
+    parseCidr(details.address)
   }
   return changed(project, { interfaces: project.interfaces.map((i) => i.id === id ? { ...i, ...details } : i) })
 }
@@ -128,6 +129,7 @@ export function deleteInterface(project: Project, id: string): Project {
     interfaces: project.interfaces.filter((i) => i.id !== id),
     notes: project.notes.map((n) => n.attachedTo?.entityType === 'interface' && n.attachedTo.id === id ? { ...n, attachedTo: undefined } : n),
     checklistItems: project.checklistItems.map((c) => c.attachedTo?.entityType === 'interface' && c.attachedTo.id === id ? { ...c, attachedTo: undefined } : c),
+    layout: { ...project.layout, logical: Object.fromEntries(Object.entries(project.layout.logical).filter(([key]) => key !== `iface:${id}`)) },
   })
 }
 
@@ -155,8 +157,16 @@ export function validateLogical(project: Project): string[] {
     if (iface.vlanId && !project.vlans.some((v) => v.id === iface.vlanId)) errors.push(`Interface ${iface.name} references missing VLAN.`)
     if (iface.portId && !project.ports.some((p) => p.id === iface.portId)) errors.push(`Interface ${iface.name} references missing port.`)
     if (iface.address) {
-      try { parseNetwork(iface.address) } catch { errors.push(`Interface ${iface.name} has invalid address.`) }
+      try { parseCidr(iface.address) } catch { errors.push(`Interface ${iface.name} has invalid address.`) }
     }
   }
   return errors
+}
+
+export function moveLogicalNodes(project: Project, positions: Project['layout']['logical']): Project {
+  const parsed = projectSchema.shape.layout.shape.logical.parse(positions)
+  const ids = new Set([...project.vlans.map((vlan) => `vlan:${vlan.id}`), ...project.subnets.map((subnet) => `subnet:${subnet.id}`), ...project.interfaces.map((iface) => `iface:${iface.id}`)])
+  for (const id of Object.keys(parsed)) if (!ids.has(id)) throw new Error('This logical node no longer exists.')
+  if (!Object.keys(parsed).length) return project
+  return changed(project, { layout: { ...project.layout, logical: { ...project.layout.logical, ...parsed } } })
 }
