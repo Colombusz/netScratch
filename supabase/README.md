@@ -1,5 +1,7 @@
 # Supabase setup
 
+The Cloud workspace was removed from the application at the user's request. The instructions below document the earlier implementation and are not an activation path in the current app.
+
 Cloud storage is optional. The app works locally before setup. No env file needs to be created, read, or edited.
 
 1. Use a Supabase project you control. In Authentication, enable the email/password provider. Set the Site URL and allowed redirect URLs to the exact app address, including its path if hosted in a subdirectory. For local development the default address is `http://127.0.0.1:5173/`. Add your production HTTPS address when deploying. Configure email delivery and confirmation according to your project's settings.

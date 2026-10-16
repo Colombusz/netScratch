@@ -92,3 +92,22 @@ Reading this as a network review and project-management workspace for engineers,
 - Existing neutral surfaces, teal actions, spacing, borders, and theme tokens keep both workspaces consistent with the earlier phases.
 
 Final requirements, test evidence, and the full antislop delivery gate are recorded in `remaining-phases-verification.md`. Supabase activation instructions are tracked in `../supabase/README.md`.
+
+## Complete sample project
+
+Reading this as an example-project control for engineers exploring the existing workspace. ENERGY 1 / RHYTHM 1 / MOTION 1.
+
+- A sample section at the top of Files makes the option visible beside the existing project-opening controls.
+- The button names the operation, while confirmation names the current project and explains browser saving so replacement is deliberate.
+- The sample uses the normal project-opening path so persistence, draft resets, and cloud revision isolation behave like imported documents.
+- Fictional equipment and prices are labeled as illustrative, and a documented purchase shortage gives Issues a useful repair example.
+- Saved positions separate the physical sites and organize logical membership into groups so the canvases open with arranged content.
+- The section retains existing typography, spacing, borders, neutral surfaces, and button colors; no new visual treatment or asset is needed.
+
+## Cloud workspace removal
+
+Reading this as navigation cleanup in the existing engineering style. ENERGY 1 / RHYTHM 1 / MOTION 1.
+
+- Remove Cloud navigation and mounting together so a previously configured session cannot load an inaccessible account screen in the background.
+- Start on Calculator consistently, including old authentication callback URLs, because the app no longer exposes cloud accounts.
+- Retain existing local workspaces, sample loading, and browser storage behavior; no new visual treatment is needed.

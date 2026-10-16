@@ -1,6 +1,7 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { createEmptyProject, type Project } from '../../core/schema'
 import { documentError, parseProjectJson, projectFilename, serializeProject } from '../../core/document'
+import { createSampleProject } from '../../core/sampleProject'
 import { useProjectStore } from '../../state/projectStore'
 import { useTopologyUiStore } from '../../state/topologyUiStore'
 import { localProject, usePersistenceStore } from '../../state/persistenceStore'
@@ -50,6 +51,19 @@ export function Files() {
   return <div className="work-area files-workspace">
     <div className="file-controls">
       <header className="page-heading"><p className="section-index">07 / Project files</p><h1>Files and report</h1><p>Save a portable JSON copy, import a project, or print a report with the current plan.</p></header>
+      <section className="panel" aria-labelledby="sample-project-title">
+        <div className="section-heading"><h2 id="sample-project-title">Explore a sample project</h2><button type="button" onClick={() => {
+          if (!window.confirm(`Replace ${project.name} with a sample project? Download your current project JSON first if you need to keep it. The sample is saved in this browser like any other project.`)) return
+          try {
+            const sample = createSampleProject()
+            fileRequest.current++
+            replace(sample); useTopologyUiStore.getState().select(null)
+            setDraft(''); setCandidate(null); setReading(false); setTiled(false); setError('')
+            setFeedback('Sample project loaded. Explore Physical, Logical, Planner, Inventory, Notes, and Issues using the workspace navigation.')
+          } catch (cause) { setError(documentError(cause)); setFeedback('') }
+        }}>Load sample project</button></div>
+        <p className="help">A fictional office and branch with devices, cables, VLANs, subnets, inventory, notes, and a checklist. Saved diagrams are ready to explore. One planned access point exceeds stock to demonstrate Issues; equipment and prices are illustrative. Loading replaces the open project after confirmation.</p>
+      </section>
       <section className="panel" aria-labelledby="browser-save-title">
         <h2 id="browser-save-title">Browser save</h2><p className={save.status === 'saved' ? 'notice mt-3' : 'error mt-3'} role={save.status === 'saved' ? 'status' : 'alert'}>{save.message}</p>
         <div className="file-actions">

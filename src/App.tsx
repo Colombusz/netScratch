@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Calculator } from './features/calculator/Calculator'
 import { Planner } from './features/planner/Planner'
 import { Topology } from './features/topology/Topology'
@@ -12,12 +12,8 @@ import { useTopologyUiStore } from './state/topologyUiStore'
 import { usePersistenceStore } from './state/persistenceStore'
 import { useProjectStore } from './state/projectStore'
 
-const Cloud = lazy(() => import('./features/cloud/Cloud'))
-function hasCloudConfig() { try { return Boolean(localStorage.getItem('netscratch.cloud.config.v1')) } catch { return false } }
-
 export function App() {
-  const [page, setPage] = useState<'calculator' | 'planner' | 'topology' | 'logical' | 'inventory' | 'notes' | 'files' | 'issues' | 'cloud'>(() => hasCloudConfig() && new URLSearchParams(window.location.search).has('code') ? 'cloud' : 'calculator')
-  const [cloudRequested, setCloudRequested] = useState(hasCloudConfig)
+  const [page, setPage] = useState<'calculator' | 'planner' | 'topology' | 'logical' | 'inventory' | 'notes' | 'files' | 'issues'>('calculator')
   const [target, setTarget] = useState<EntityRef>()
   const undo = useProjectStore((s) => s.undo)
   const redo = useProjectStore((s) => s.redo)
@@ -90,7 +86,6 @@ export function App() {
         <button type="button" aria-current={page === 'notes' ? 'page' : undefined} onClick={() => setPage('notes')}><span>06</span>Notes</button>
         <button type="button" aria-current={page === 'files' ? 'page' : undefined} onClick={() => setPage('files')}><span>07</span>Files</button>
         <button type="button" aria-current={page === 'issues' ? 'page' : undefined} onClick={() => setPage('issues')}><span>08</span>Issues</button>
-        <button type="button" aria-current={page === 'cloud' ? 'page' : undefined} onClick={() => { setCloudRequested(true); setPage('cloud') }}><span>09</span>Cloud</button>
         <div className="history-controls" aria-label="Project history"><button type="button" disabled={!canUndo} onClick={undo}>Undo</button><button type="button" disabled={!canRedo} onClick={redo}>Redo</button></div>
         <p className="sidebar-note">Network planning and project files<span>50 changes of session history</span></p>
       </nav>
@@ -104,7 +99,6 @@ export function App() {
         {page === 'notes' && <Notes key={epoch} />}
         {page === 'files' && <Files />}
         {page === 'issues' && <Issues onInspect={inspect} />}
-        {cloudRequested && <div hidden={page !== 'cloud'}><Suspense fallback={<p className="notice" role="status">Loading cloud workspace…</p>}><Cloud /></Suspense></div>}
       </main>
     </div>
   </div>

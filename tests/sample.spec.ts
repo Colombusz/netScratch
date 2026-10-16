@@ -1,0 +1,101 @@
+import { test, expect, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+import type { Project } from '../src/core/schema'
+
+async function current(page: Page): Promise<Project> {
+  return page.evaluate(async () => { const path = '/src/state/projectStore.ts'; return (await import(path)).useProjectStore.getState().project })
+}
+async function loadSample(page: Page) {
+  await page.goto('/')
+  await page.getByRole('button', { name: '07 Files', exact: true }).click()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Load sample project', exact: true }).click()
+  await expect(page.getByLabel('Project name', { exact: true })).toHaveValue('Sample / Office and branch')
+}
+
+test('sample loading confirms replacement, preserves cancelled work, clears import drafts and creates independent documents', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Project name', { exact: true }).fill('Keep my project')
+  await page.getByLabel('Project name', { exact: true }).press('Enter')
+  await page.getByRole('button', { name: '02 Planner', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate subnets', exact: true }).click()
+  const before = await current(page)
+  await page.getByRole('button', { name: '07 Files', exact: true }).click()
+  await page.getByRole('button', { name: 'Load current JSON', exact: true }).click()
+  await page.getByRole('button', { name: 'Validate JSON', exact: true }).click()
+  page.once('dialog', async (dialog) => { expect(dialog.message()).toContain('Keep my project'); await dialog.dismiss() })
+  await page.getByRole('button', { name: 'Load sample project', exact: true }).click()
+  expect(await current(page)).toEqual(before)
+  await expect(page.getByRole('heading', { name: 'Import preview: Keep my project' })).toBeVisible()
+  const button = page.getByRole('button', { name: 'Load sample project', exact: true })
+  await button.focus()
+  page.once('dialog', (dialog) => dialog.accept())
+  await button.press('Enter')
+  await expect(page.getByRole('status').filter({ hasText: 'Sample project loaded.' })).toBeVisible()
+  await expect(page.getByLabel('Editable project JSON')).toBeEmpty()
+  await expect(page.getByRole('heading', { name: /Import preview:/ })).toHaveCount(0)
+  const first = await current(page)
+  expect(first.id).not.toBe(before.id)
+  expect(first.devices).toHaveLength(8)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('netscratch.backup.v1')!).id)).toBe(before.id)
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+  page.once('dialog', (dialog) => dialog.accept())
+  await button.click()
+  expect((await current(page)).id).not.toBe(first.id)
+})
+
+test('the sample fills every project workspace, remains editable, and survives reload', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message))
+  await loadSample(page)
+  const id = (await current(page)).id
+  await page.getByRole('button', { name: '03 Physical', exact: true }).click()
+  await expect(page.getByText('8 devices · 17 ports · 7 cables', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Fit view', exact: true }).click()
+  await page.screenshot({ path: 'test-results/sample-physical.png', fullPage: true })
+  await page.getByRole('button', { name: '04 Logical', exact: true }).click()
+  await expect(page.getByText('5 VLANs · 7 subnets · 12 interfaces', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Fit view', exact: true }).click()
+  await page.screenshot({ path: 'test-results/sample-logical.png', fullPage: true })
+  await page.getByRole('button', { name: '02 Planner', exact: true }).click()
+  await expect(page.getByLabel('Parent block', { exact: true })).toHaveValue('10.20.0.0/16')
+  await expect(page.getByRole('rowheader', { name: 'Future office expansion', exact: true })).toBeVisible()
+  await page.getByLabel('Edit address space').selectOption('sample-space-branch')
+  await expect(page.getByRole('rowheader', { name: 'Branch staff', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '05 Inventory', exact: true }).click()
+  await expect(page.getByText('Short 1', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '06 Notes', exact: true }).click()
+  await expect(page.getByRole('paragraph').filter({ hasText: 'This is a fictional sample project' })).toBeVisible()
+  await expect(page.getByText('Purchase the additional branch access point', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+  await expect(page.getByRole('status')).toHaveText('0 errors · 1 warnings. Checks update as you apply changes.')
+  await page.getByRole('button', { name: 'Open Hardware: Sample wireless AP', exact: true }).click()
+  await page.getByLabel('Available quantity', { exact: true }).fill('2')
+  await page.getByRole('button', { name: 'Apply hardware', exact: true }).click()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+  await expect(page.getByText('No issues found by the current checks.', { exact: false })).toBeVisible()
+  await page.reload()
+  expect((await current(page)).id).toBe(id)
+  expect((await current(page)).hardwareItems.find((item) => item.id === 'sample-hardware-ap')!.quantityAvailable).toBe(2)
+  await page.getByRole('button', { name: '07 Files', exact: true }).click()
+  await expect(page.locator('.print-report').getByRole('heading', { name: 'Sample / Office and branch', exact: true })).toBeVisible()
+  await expect(page.locator('.report-section')).toHaveCount(7)
+  expect(errors).toEqual([])
+})
+
+test('sample controls and the populated report support both themes and mobile layouts', async ({ page }) => {
+  await loadSample(page)
+  const section = page.getByRole('region', { name: 'Explore a sample project', exact: true })
+  for (const theme of ['light', 'dark']) {
+    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark theme' }).click()
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+    await section.screenshot({ path: `test-results/sample-controls-${theme}.png` })
+  }
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  await page.setViewportSize({ width: 390, height: 1000 })
+  await section.screenshot({ path: 'test-results/sample-controls-mobile.png' })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
