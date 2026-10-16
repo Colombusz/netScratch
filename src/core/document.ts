@@ -6,7 +6,7 @@ import type { Project, Note, ChecklistItem } from './schema'
 
 export function documentError(cause: unknown): string {
   if (cause instanceof z.ZodError) return cause.issues.map((issue) => `${issue.path.join('.') || 'Project'}: ${issue.message}`).join('\n')
-  return cause instanceof Error ? cause.message : 'Could not read this project.'
+  return cause && typeof cause === 'object' && 'message' in cause && typeof cause.message === 'string' ? cause.message : 'Could not read this project.'
 }
 
 export function referenceIssues(project: Project): string[] {

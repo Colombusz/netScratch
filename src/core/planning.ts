@@ -41,7 +41,14 @@ export function applyPlan(project: Project, space: AddressSpace, subnets: Subnet
   const remainingIds = new Set(allSubnets.map((subnet) => subnet.id))
   const removedIds = new Set(project.subnets.filter((subnet) => !remainingIds.has(subnet.id)).map((subnet) => subnet.id))
   const detach = <T extends { attachedTo?: { entityType: string; id: string } }>(item: T): T => item.attachedTo?.entityType === 'subnet' && removedIds.has(item.attachedTo.id) ? { ...item, attachedTo: undefined } : item
-  return projectSchema.parse({ ...project, addressSpaces, subnets: allSubnets, notes: project.notes.map(detach), checklistItems: project.checklistItems.map(detach), updatedAt: new Date().toISOString() })
+  return projectSchema.parse({ ...project, addressSpaces, subnets: allSubnets, notes: project.notes.map(detach), checklistItems: project.checklistItems.map(detach), layout: { ...project.layout, logical: Object.fromEntries(Object.entries(project.layout.logical).filter(([key]) => !removedIds.has(key.replace(/^subnet:/, '')))) }, updatedAt: new Date().toISOString() })
+}
+
+export function deleteAddressSpace(project: Project, id: string): Project {
+  if (!project.addressSpaces.some((space) => space.id === id)) throw new Error('Address space no longer exists.')
+  const removed = new Set([id, ...project.subnets.filter((subnet) => subnet.addressSpaceId === id).map((subnet) => subnet.id)])
+  const detach = <T extends { attachedTo?: { id: string } }>(item: T): T => item.attachedTo && removed.has(item.attachedTo.id) ? { ...item, attachedTo: undefined } : item
+  return { ...project, updatedAt: new Date().toISOString(), addressSpaces: project.addressSpaces.filter((space) => space.id !== id), subnets: project.subnets.filter((subnet) => subnet.addressSpaceId !== id), notes: project.notes.map(detach), checklistItems: project.checklistItems.map(detach), layout: { ...project.layout, logical: Object.fromEntries(Object.entries(project.layout.logical).filter(([key]) => !removed.has(key.replace(/^subnet:/, '')))) } }
 }
 
 export function generatePlan(project: Project, space: AddressSpace, requirements: Requirement[]) {

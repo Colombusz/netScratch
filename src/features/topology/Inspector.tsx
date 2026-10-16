@@ -66,7 +66,7 @@ function DeviceEditor({ device }: { device: Device }) {
   function deleteSelectedDevice() {
     const portIds = new Set(ports.map((port) => port.id))
     const cableCount = useProjectStore.getState().project.links.filter((link) => portIds.has(link.sourcePortId) || portIds.has(link.targetPortId)).length
-    if (!window.confirm(`Delete ${device.name}? This removes ${ports.length} ports and ${cableCount} cables. This cannot be undone in Phase 2.`)) return
+    if (!window.confirm(`Delete ${device.name}? This removes ${ports.length} ports and ${cableCount} cables. You can undo this change during this session.`)) return
     remove(device.id)
     select(null)
   }
@@ -93,6 +93,10 @@ function PortEditor({ port }: { port: Port }) {
   const [name, setName] = useState(port.name)
   const [speed, setSpeed] = useState(port.speed)
   const [media, setMedia] = useState(port.media)
+  const [mode, setMode] = useState(port.mode)
+  const [accessVlanId, setAccessVlanId] = useState(port.accessVlanId ?? '')
+  const [trunkVlanIds, setTrunkVlanIds] = useState(port.trunkVlanIds)
+  const vlans = useProjectStore((state) => state.project.vlans)
   const [feedback, setFeedback] = useState('')
   const device = useProjectStore((state) => state.project.devices.find((d) => d.id === port.deviceId))
   const cable = useProjectStore((state) => state.project.links.find((link) => link.sourcePortId === port.id || link.targetPortId === port.id))
@@ -101,10 +105,13 @@ function PortEditor({ port }: { port: Port }) {
   const select = useTopologyUiStore((state) => state.select)
   return <>
     <p className="help mb-4">{device?.name} / {port.name}</p>
-    <EditorForm submitLabel="Apply port" onSubmit={() => { update(port.id, { name, speed, media }); setFeedback('Port updated. Its cable stays connected.') }} onCancel={() => select({ kind: 'device', id: port.deviceId })}>
+    <EditorForm submitLabel="Apply port" onSubmit={() => { update(port.id, { name, speed, media, mode, accessVlanId: accessVlanId || null, trunkVlanIds }); setFeedback('Port updated. Its cable stays connected.') }} onCancel={() => select({ kind: 'device', id: port.deviceId })}>
       <div className="field"><label htmlFor="edit-port-name">Port name</label><input id="edit-port-name" value={name} onChange={(e) => setName(e.target.value)} /></div>
       <div className="field"><label htmlFor="edit-port-speed">Port speed</label><input id="edit-port-speed" value={speed} onChange={(e) => setSpeed(e.target.value)} /></div>
       <MediaField id="edit-port-media" value={media} onChange={setMedia} />
+      <div className="field"><label htmlFor="edit-port-mode">Port mode</label><select id="edit-port-mode" value={mode} onChange={(e) => setMode(e.target.value as Port['mode'])}>{['unused', 'access', 'trunk', 'routed'].map((value) => <option key={value}>{value}</option>)}</select></div>
+      {mode === 'access' && <div className="field"><label htmlFor="access-vlan">Access VLAN</label><select id="access-vlan" value={accessVlanId} onChange={(e) => setAccessVlanId(e.target.value)}><option value="">Choose a VLAN</option>{vlans.map((vlan) => <option key={vlan.id} value={vlan.id}>{vlan.number}: {vlan.name}</option>)}</select></div>}
+      {mode === 'trunk' && <fieldset className="field"><legend>Trunk VLANs</legend>{!vlans.length && <p className="help">Create VLANs in Logical first.</p>}{vlans.map((vlan) => <label className="check-label" key={vlan.id}><input type="checkbox" checked={trunkVlanIds.includes(vlan.id)} onChange={(e) => setTrunkVlanIds(e.target.checked ? [...trunkVlanIds, vlan.id] : trunkVlanIds.filter((id) => id !== vlan.id))} />{vlan.number}: {vlan.name}</label>)}</fieldset>}
     </EditorForm>
     {feedback && <p role="status" className="notice mt-4">{feedback}</p>}
     <hr />
@@ -112,7 +119,7 @@ function PortEditor({ port }: { port: Port }) {
       : <><p className="help mb-3">This port is free.</p><button type="button" onClick={() => select({ kind: 'connect', id: port.id })}>Connect this port</button></>}
     <hr />
     <button type="button" className="danger-button" onClick={() => {
-      if (!window.confirm(`Delete port ${port.name}${cable ? ' and its cable' : ''}? This cannot be undone in Phase 2.`)) return
+      if (!window.confirm(`Delete port ${port.name}${cable ? ' and its cable' : ''}? You can undo this change during this session.`)) return
       remove(port.id); select({ kind: 'device', id: port.deviceId })
     }}>Delete port</button>
   </>

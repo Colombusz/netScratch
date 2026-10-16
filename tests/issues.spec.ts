@@ -1,0 +1,137 @@
+import { test, expect, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+
+async function seed(page: Page) {
+  await page.goto('/')
+  await page.evaluate(async () => {
+    const url = '/src/state/projectStore.ts'; const { useProjectStore } = await import(url)
+    const p = structuredClone(useProjectStore.getState().project)
+    p.addressSpaces = [{ id: 'space', name: 'Office', parentCidr: '10.0.0.0/16', scope: 'HQ' }]
+    p.vlans = [{ id: 'staff', number: 10, name: 'Staff' }]
+    p.subnets = [{ id: 'subnet', name: 'Staff network', cidr: '10.0.0.0/24', addressSpaceId: 'space', status: 'allocated', source: 'manual', hostRequirement: 10, gatewayIp: null, vlanId: 'staff', notes: '' }]
+    p.devices = ['a', 'b'].map((id) => ({ id, name: `Switch ${id}`, role: 'switch', scope: 'HQ', hardwareItemId: null, notes: '' }))
+    p.ports = ['pa', 'pb'].map((id, i) => ({ id, deviceId: i ? 'b' : 'a', name: 'eth0', speed: '1 Gbps', media: 'copper', mode: 'access', accessVlanId: i ? null : 'staff', trunkVlanIds: [] }))
+    p.interfaces = ['ia', 'ib'].map((id, i) => ({ id, deviceId: i ? 'b' : 'a', name: `LAN ${i}`, kind: 'physical', portId: i ? 'pb' : 'pa', vlanId: 'staff', address: '10.0.0.1/24' }))
+    p.hardwareItems = [{ id: 'hardware', model: 'Switch stock', category: 'Switch', quantityAvailable: 0, unitCost: 10, portCount: 24, capabilities: [] }]
+    p.allocations = [{ id: 'allocation', hardwareItemId: 'hardware', deviceId: 'a', scope: null, quantity: 1 }]
+    useProjectStore.getState().openProject(p)
+  })
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+}
+
+test('issues filter, navigate to the affected editor, and disappear after repair in both views and report', async ({ page }) => {
+  await seed(page)
+  await expect(page.getByRole('heading', { name: /10.0.0.1 is assigned to 2 interfaces/ })).toBeVisible()
+  await page.getByLabel('Search issues').fill('duplicate-ip')
+  await expect(page.locator('.issue-list > li')).toHaveCount(1)
+  const affected = page.locator('.issue-list > li').getByRole('button', { name: /Open.*LAN 1/ })
+  await affected.focus(); await affected.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Interface: LAN 1', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Interface name', { exact: true })).toBeFocused()
+  await page.getByLabel('IP address / prefix', { exact: true }).fill('10.0.0.2/24')
+  await page.getByRole('button', { name: 'Apply interface', exact: true }).click()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+  await expect(page.getByRole('heading', { name: /10.0.0.1 is assigned/ })).toHaveCount(0)
+  await page.getByLabel('Category', { exact: true }).selectOption('Hardware')
+  await page.locator('.issue-list').getByRole('button', { name: /Open.*Switch stock/ }).click()
+  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('Switch stock')
+  await page.getByLabel('Available quantity', { exact: true }).fill('1')
+  await page.getByRole('button', { name: 'Apply hardware', exact: true }).click()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+  await page.getByLabel('Search issues').fill('access-vlan')
+  await page.locator('.issue-list').getByRole('button', { name: /Open/ }).click()
+  await expect(page.getByLabel('Port mode')).toHaveValue('access')
+  await page.getByLabel('Access VLAN').selectOption('staff')
+  await page.getByRole('button', { name: 'Apply port', exact: true }).click()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+  await expect(page.getByText('No issues found by the current checks.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: '07 Files', exact: true }).click()
+  await expect(page.locator('.print-report')).not.toContainText('is assigned to 2 interfaces')
+})
+
+test('issues are accessible in both themes and responsive; no-match filters remain usable', async ({ page }) => {
+  await seed(page)
+  for (const theme of ['light', 'dark']) {
+    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark theme' }).click()
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+    await page.screenshot({ path: `test-results/issues-${theme}.png`, fullPage: true })
+  }
+  await page.getByLabel('Severity', { exact: true }).selectOption('warning')
+  await page.getByLabel('Category', { exact: true }).selectOption('Addressing')
+  await expect(page.getByText('No issues match these filters.')).toBeVisible()
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  await page.getByLabel('Severity', { exact: true }).selectOption('all'); await page.getByLabel('Category', { exact: true }).selectOption('all')
+  await page.setViewportSize({ width: 390, height: 1000 }); await page.screenshot({ path: 'test-results/issues-mobile.png', fullPage: true })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('undo/redo persists committed transactions and leaves text-field undo native', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: '02 Planner', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate subnets', exact: true }).click()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(page.getByText('No subnets yet.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Redo', exact: true }).click()
+  await expect(page.getByRole('cell', { name: '192.168.10.0/25', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).focus(); await page.keyboard.press('Control+z')
+  await expect(page.getByText('No subnets yet.', { exact: false })).toBeVisible()
+  await page.keyboard.press('Control+Shift+z')
+  await expect(page.getByRole('cell', { name: '192.168.10.0/25', exact: true })).toBeVisible()
+  await page.getByLabel('Project name', { exact: true }).fill('Draft name'); await page.keyboard.press('Control+z')
+  await expect(page.getByRole('cell', { name: '192.168.10.0/25', exact: true })).toBeVisible()
+  await page.reload(); await page.getByRole('button', { name: '02 Planner', exact: true }).click()
+  await expect(page.getByRole('cell', { name: '192.168.10.0/25', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+})
+
+test('multiple routing scopes can be created, renamed, removed and undone without JSON editing', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: '02 Planner', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate subnets', exact: true }).click()
+  await page.getByRole('button', { name: 'New address space', exact: true }).click()
+  await page.getByLabel('Address space name').fill('Branch office')
+  await page.getByLabel('Parent block', { exact: true }).fill('192.168.10.0/24')
+  await page.getByLabel('Routing scope').fill('Branch')
+  await page.getByRole('button', { name: 'Apply parent', exact: true }).click()
+  await expect(page.getByLabel('Edit address space')).toContainText('Branch office')
+  await page.getByRole('button', { name: 'Add segment', exact: true }).click()
+  await page.getByLabel('Segment 1', { exact: true }).fill('Branch LAN'); await page.getByLabel('Usable addresses 1', { exact: true }).fill('100')
+  await page.getByRole('button', { name: 'Generate subnets', exact: true }).click()
+  await expect(page.getByRole('cell', { name: '192.168.10.0/25', exact: true })).toBeVisible()
+  page.once('dialog', (dialog) => dialog.accept()); await page.getByRole('button', { name: 'Delete address space', exact: true }).click()
+  await expect(page.getByLabel('Address space name')).toHaveValue('Primary address space')
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await page.getByLabel('Edit address space').selectOption({ label: 'Branch office (192.168.10.0/24, Branch)' })
+  await expect(page.getByRole('rowheader', { name: 'Branch LAN', exact: true })).toBeVisible()
+})
+
+test('subnet issues open the correct routing space and port configuration supports all modes', async ({ page }) => {
+  await seed(page)
+  await page.evaluate(async () => {
+    const url = '/src/state/projectStore.ts'; const { useProjectStore } = await import(url)
+    const p = structuredClone(useProjectStore.getState().project)
+    p.addressSpaces.push({ id: 'branch', name: 'Branch', parentCidr: '10.1.0.0/16', scope: 'Branch' })
+    p.subnets.push({ ...p.subnets[0], id: 'branch-subnet', name: 'Branch network', addressSpaceId: 'branch', cidr: '10.1.0.0/24' })
+    useProjectStore.getState().replaceProject(p)
+  })
+  await page.getByLabel('Search issues').fill('vlan-subnets')
+  await page.getByRole('button', { name: /Open.*Branch network/ }).click()
+  await expect(page.getByLabel('Parent block', { exact: true })).toHaveValue('10.1.0.0/16')
+  await expect(page.getByLabel('Subnet name', { exact: true })).toHaveValue('Branch network')
+  await page.getByLabel('Subnet VLAN').selectOption('')
+  await page.getByRole('button', { name: 'Apply subnet', exact: true }).click()
+  await page.getByRole('button', { name: '08 Issues', exact: true }).click()
+  await expect(page.getByRole('heading', { name: /assigned to 2 subnets/ })).toHaveCount(0)
+  await page.getByLabel('Search issues').fill('access-vlan')
+  await page.locator('.issue-list').getByRole('button', { name: /Open/ }).click()
+  await page.getByLabel('Port mode').selectOption('trunk')
+  await page.getByRole('checkbox', { name: '10: Staff', exact: true }).check()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await page.getByRole('button', { name: 'Apply port', exact: true }).click()
+  await page.getByLabel('Port mode').selectOption('routed'); await page.getByRole('button', { name: 'Apply port', exact: true }).click()
+  await page.getByLabel('Port mode').selectOption('unused'); await page.getByRole('button', { name: 'Apply port', exact: true }).click()
+})

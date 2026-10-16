@@ -1,0 +1,13 @@
+.issues-workspace { max-width: 76rem; }
+.issue-filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+.issue-list { list-style: none; padding: 0; }
+.issue-list > li { border-top: 1px solid var(--line); padding: 1.4rem 0; overflow-wrap: anywhere; }
+.issue-list h2 { font-size: 1rem; margin: .4rem 0; }
+.issue-list > li > p { font-size: .8125rem; line-height: 1.65; }
+.issue-error { color: var(--error); }
+.issue-targets { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .8rem; }
+.issue-targets button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; text-align: left; }
+.history-controls { display: flex; flex-wrap: wrap; gap: .4rem; }
+.check-label { display: flex; align-items: center; gap: .6rem; margin-block: .7rem; }
+.check-label input { width: auto; }
+@media (max-width: 767px) { .issue-filters { grid-template-columns: minmax(0, 1fr); gap: 0; } }

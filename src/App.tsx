@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import { Calculator } from './features/calculator/Calculator'
 import { Planner } from './features/planner/Planner'
 import { Topology } from './features/topology/Topology'
@@ -6,11 +6,23 @@ import { LogicalView } from './features/topology/LogicalView'
 import { Inventory } from './features/inventory/Inventory'
 import { Notes } from './features/notes/Notes'
 import { Files } from './features/files/Files'
+import { Issues } from './features/issues/Issues'
+import type { EntityRef } from './core/issues'
+import { useTopologyUiStore } from './state/topologyUiStore'
 import { usePersistenceStore } from './state/persistenceStore'
 import { useProjectStore } from './state/projectStore'
 
+const Cloud = lazy(() => import('./features/cloud/Cloud'))
+function hasCloudConfig() { try { return Boolean(localStorage.getItem('netscratch.cloud.config.v1')) } catch { return false } }
+
 export function App() {
-  const [page, setPage] = useState<'calculator' | 'planner' | 'topology' | 'logical' | 'inventory' | 'notes' | 'files'>('calculator')
+  const [page, setPage] = useState<'calculator' | 'planner' | 'topology' | 'logical' | 'inventory' | 'notes' | 'files' | 'issues' | 'cloud'>(() => hasCloudConfig() && new URLSearchParams(window.location.search).has('code') ? 'cloud' : 'calculator')
+  const [cloudRequested, setCloudRequested] = useState(hasCloudConfig)
+  const [target, setTarget] = useState<EntityRef>()
+  const undo = useProjectStore((s) => s.undo)
+  const redo = useProjectStore((s) => s.redo)
+  const canUndo = useProjectStore((s) => s.past.length > 0)
+  const canRedo = useProjectStore((s) => s.future.length > 0)
   const [dark, setDark] = useState(false)
   const name = useProjectStore((s) => s.project.name)
   const epoch = useProjectStore((s) => s.documentEpoch)
@@ -18,7 +30,34 @@ export function App() {
   const [draftName, setDraftName] = useState(name)
   const [nameError, setNameError] = useState('')
   const save = usePersistenceStore()
-  useEffect(() => { setDraftName(name); setNameError('') }, [name])
+  useEffect(() => { setDraftName(name); setNameError('') }, [name, epoch])
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent) {
+      const element = event.target as HTMLElement
+      if (element.closest('input,textarea,select,[contenteditable="true"]') || event.altKey || !(event.ctrlKey || event.metaKey)) return
+      if (event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) redo(); else undo() }
+      if (event.key.toLowerCase() === 'y') { event.preventDefault(); redo() }
+    }
+    window.addEventListener('keydown', shortcut)
+    return () => window.removeEventListener('keydown', shortcut)
+  }, [undo, redo])
+
+  function inspect(entity: EntityRef) {
+    setTarget(entity)
+    if (['device', 'port', 'link'].includes(entity.entityType)) {
+      useTopologyUiStore.getState().select({ kind: entity.entityType as 'device' | 'port' | 'link', id: entity.id }); setPage('topology')
+    } else if (entity.entityType === 'vlan' || entity.entityType === 'interface') {
+      useTopologyUiStore.getState().select({ kind: entity.entityType, id: entity.id }); setPage('logical')
+    } else if (entity.entityType === 'subnet' || entity.entityType === 'addressSpace') setPage('planner')
+    else if (entity.entityType === 'hardwareItem' || entity.entityType === 'allocation') setPage('inventory')
+    else setPage('files')
+    requestAnimationFrame(() => {
+      const selector = entity.entityType === 'subnet' ? '#subnet-name' : entity.entityType === 'addressSpace' ? '#parent-cidr' : entity.entityType === 'hardwareItem' || entity.entityType === 'allocation' ? '.inventory-workspace form input, .inventory-workspace form select' : '.topology-inspector input'
+      const element = document.querySelector<HTMLElement>(selector)
+      if (element && element.getClientRects().length) element.focus()
+      else document.getElementById('main')?.focus()
+    })
+  }
 
   function rename(event?: FormEvent) {
     event?.preventDefault()
@@ -50,18 +89,22 @@ export function App() {
         <button type="button" aria-current={page === 'inventory' ? 'page' : undefined} onClick={() => setPage('inventory')}><span>05</span>Inventory</button>
         <button type="button" aria-current={page === 'notes' ? 'page' : undefined} onClick={() => setPage('notes')}><span>06</span>Notes</button>
         <button type="button" aria-current={page === 'files' ? 'page' : undefined} onClick={() => setPage('files')}><span>07</span>Files</button>
-        <div className="later-phases"><p className="nav-label">Later phases</p><ul><li>Issues</li></ul></div>
-        <p className="sidebar-note">Network planning and project files<span>Phase 4 of 6</span></p>
+        <button type="button" aria-current={page === 'issues' ? 'page' : undefined} onClick={() => setPage('issues')}><span>08</span>Issues</button>
+        <button type="button" aria-current={page === 'cloud' ? 'page' : undefined} onClick={() => { setCloudRequested(true); setPage('cloud') }}><span>09</span>Cloud</button>
+        <div className="history-controls" aria-label="Project history"><button type="button" disabled={!canUndo} onClick={undo}>Undo</button><button type="button" disabled={!canRedo} onClick={redo}>Redo</button></div>
+        <p className="sidebar-note">Network planning and project files<span>50 changes of session history</span></p>
       </nav>
       <main id="main" tabIndex={-1}>
         <div className="session-notice" role={save.status === 'saved' ? undefined : 'alert'}>{save.message}{save.status !== 'saved' && <button type="button" className="text-button" onClick={() => setPage('files')}>Review browser save</button>}</div>
         <div hidden={page !== 'calculator'}><Calculator key={epoch} /></div>
-        <div hidden={page !== 'planner'}><Planner key={epoch} /></div>
+        <div hidden={page !== 'planner'}><Planner key={`${epoch}:${target?.entityType}:${target?.id}`} target={target} /></div>
         {page === 'topology' && <Topology key={epoch} />}
         {page === 'logical' && <LogicalView key={epoch} />}
-        {page === 'inventory' && <Inventory key={epoch} />}
+        {page === 'inventory' && <Inventory key={`${epoch}:${target?.id}`} target={target} />}
         {page === 'notes' && <Notes key={epoch} />}
         {page === 'files' && <Files />}
+        {page === 'issues' && <Issues onInspect={inspect} />}
+        {cloudRequested && <div hidden={page !== 'cloud'}><Suspense fallback={<p className="notice" role="status">Loading cloud workspace…</p>}><Cloud /></Suspense></div>}
       </main>
     </div>
   </div>

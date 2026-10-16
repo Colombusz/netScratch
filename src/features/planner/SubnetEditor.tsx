@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { z } from 'zod'
 import { parseNetwork } from '../../core/cidr'
 import { subnetSchema, type Subnet } from '../../core/schema'
+import { useProjectStore } from '../../state/projectStore'
 
 export function SubnetEditor({ subnet, onSave, onCancel }: {
   subnet: Subnet; onSave: (subnet: Subnet) => void; onCancel: () => void
@@ -10,6 +11,8 @@ export function SubnetEditor({ subnet, onSave, onCancel }: {
   const [cidr, setCidr] = useState(subnet.cidr)
   const [hosts, setHosts] = useState(String(subnet.hostRequirement))
   const [gateway, setGateway] = useState(subnet.gatewayIp ?? '')
+  const [vlanId, setVlanId] = useState(subnet.vlanId ?? '')
+  const vlans = useProjectStore((s) => s.project.vlans)
   const [status, setStatus] = useState(subnet.status)
   const [error, setError] = useState('')
 
@@ -18,7 +21,7 @@ export function SubnetEditor({ subnet, onSave, onCancel }: {
     try {
       const next = subnetSchema.parse({ ...subnet, name, cidr: parseNetwork(cidr).cidr,
         hostRequirement: status === 'reserved' ? 0 : Number(hosts), status,
-        gatewayIp: gateway.trim() || null, source: 'manual' })
+        gatewayIp: gateway.trim() || null, vlanId: vlanId || null, source: 'manual' })
       onSave(next)
     } catch (cause) {
       setError(cause instanceof z.ZodError ? cause.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n') : (cause as Error).message)
@@ -29,6 +32,7 @@ export function SubnetEditor({ subnet, onSave, onCancel }: {
     <h2>Subnet inspector</h2>
     <p className="help mt-2 mb-5">Manual blocks stay fixed when you generate a plan again.</p>
     <div className="field"><label htmlFor="subnet-name">Subnet name</label><input id="subnet-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
+    <div className="field"><label htmlFor="planner-subnet-vlan">Subnet VLAN</label><select id="planner-subnet-vlan" value={vlanId} onChange={(e) => setVlanId(e.target.value)}><option value="">No VLAN</option>{vlans.map((vlan) => <option key={vlan.id} value={vlan.id}>{vlan.number}: {vlan.name}</option>)}</select></div>
     <div className="field"><label htmlFor="subnet-cidr">Subnet CIDR</label><input id="subnet-cidr" className="address" value={cidr} onChange={(e) => setCidr(e.target.value)} spellCheck={false} /></div>
     <div className="field"><label htmlFor="subnet-status">Status</label><select id="subnet-status" value={status} onChange={(e) => setStatus(e.target.value as Subnet['status'])}>
       <option value="allocated">Allocated</option><option value="reserved">Reserved</option>

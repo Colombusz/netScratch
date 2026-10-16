@@ -48,7 +48,7 @@ export function DeviceInterfaces({ deviceId }: { deviceId: string }) {
     {!interfaces.length ? <p className="help">No interfaces yet. Add a physical interface, subinterface, SVI, or loopback.</p> : <ul className="device-interface-list">{interfaces.map((iface) => <li key={iface.id}>
       <strong>{iface.name}</strong><p className="help">{iface.kind}{iface.portId ? ` / ${project.ports.find((port) => port.id === iface.portId)?.name ?? 'Missing port'}` : ''}{iface.address ? ` / ${iface.address}` : ' / Unnumbered'}{iface.vlanId ? ` / VLAN ${project.vlans.find((vlan) => vlan.id === iface.vlanId)?.number ?? 'missing'}` : ''}</p>
       <div className="flex flex-wrap gap-2"><button type="button" aria-label={`Edit interface ${iface.name}`} onClick={(event) => { trigger.current = event.currentTarget; setEditor({ iface }); setFeedback(''); setError('') }}>Edit</button><button type="button" aria-label={`Delete interface ${iface.name}`} onClick={() => {
-        if (!window.confirm(`Delete interface ${iface.name}? Notes and tasks will remain unattached. This cannot be undone in this session.`)) return
+        if (!window.confirm(`Delete interface ${iface.name}? Notes and tasks will remain unattached. You can undo this change during this session.`)) return
         try { remove(iface.id); setEditor(null); setFeedback('Interface deleted.'); setError(''); addButton.current?.focus() }
         catch (cause) { setError(errorMessage(cause)) }
       }}>Delete</button></div>

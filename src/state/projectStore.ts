@@ -8,6 +8,11 @@ import * as notes from '../core/notes'
 type ProjectState = {
   project: Project
   documentEpoch: number
+  openedEpoch: number
+  past: Project[]
+  future: Project[]
+  undo: () => void
+  redo: () => void
   openProject: (project: Project) => void
   replaceProject: (project: Project) => void
   renameProject: (name: string) => void
@@ -16,7 +21,7 @@ type ProjectState = {
   moveDevices: (changes: { id: string; position: topology.Position }[]) => void
   addPorts: (deviceId: string, details: topology.PortDetails[]) => void
   addBulkPorts: (deviceId: string, details: topology.BulkPorts) => void
-  updatePort: (id: string, details: topology.PortDetails) => void
+  updatePort: (id: string, details: topology.PortConfiguration) => void
   saveCable: (details: topology.CableDetails, id?: string) => string
   deleteDevice: (id: string) => void
   deletePort: (id: string) => void
@@ -45,12 +50,22 @@ type ProjectState = {
   moveLogicalNodes: (positions: Project['layout']['logical']) => void
 }
 
-export const useProjectStore = create<ProjectState>((set) => ({
+export const useProjectStore = create<ProjectState>((rawSet) => {
+  const set = (update: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => rawSet((state) => {
+    const patch = typeof update === 'function' ? update(state) : update
+    if (!patch.project || patch.project === state.project || patch.past !== undefined) return patch
+    return { ...patch, past: [...state.past.slice(-49), state.project], future: [] }
+  })
+  return {
   project: createEmptyProject(),
   documentEpoch: 0,
-  openProject: (project) => set((state) => ({ project: projectSchema.parse(project), documentEpoch: state.documentEpoch + 1 })),
+  openedEpoch: 0,
+  past: [], future: [],
+  undo: () => rawSet((state) => state.past.length ? { project: { ...state.past.at(-1)!, updatedAt: new Date().toISOString() }, past: state.past.slice(0, -1), future: [state.project, ...state.future].slice(0, 50), documentEpoch: state.documentEpoch + 1 } : {}),
+  redo: () => rawSet((state) => state.future.length ? { project: { ...state.future[0]!, updatedAt: new Date().toISOString() }, past: [...state.past, state.project].slice(-50), future: state.future.slice(1), documentEpoch: state.documentEpoch + 1 } : {}),
+  openProject: (project) => set((state) => ({ project: projectSchema.parse(project), documentEpoch: state.documentEpoch + 1, openedEpoch: state.openedEpoch + 1, past: [], future: [] })),
   replaceProject: (project) => set({ project: projectSchema.parse(project) }),
-  renameProject: (name) => set(({ project }) => ({
+  renameProject: (name) => set(({ project }) => name === project.name ? {} : ({
     project: projectSchema.parse({ ...project, name, updatedAt: new Date().toISOString() }),
   })),
   addDevice: (details, position) => {
@@ -117,4 +132,5 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setChecklistStatus: (id, status) => set(({ project }) => ({ project: notes.setChecklistStatus(project, id, status) })),
   deleteChecklistItem: (id) => set(({ project }) => ({ project: notes.deleteChecklistItem(project, id) })),
   moveLogicalNodes: (positions) => set(({ project }) => ({ project: logical.moveLogicalNodes(project, positions) })),
-}))
+  }
+})

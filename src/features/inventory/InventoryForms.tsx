@@ -38,7 +38,7 @@ export function HardwareForm({ item, onDone, onCancel }: { item?: HardwareItem; 
         <div className="field"><label htmlFor="hardware-ports">Ports per unit</label><input id="hardware-ports" type="number" min="0" step="1" required value={ports} onChange={(e) => setPorts(e.target.value)} /></div>
         <div className="field"><label htmlFor="hardware-capabilities">Capabilities (comma separated)</label><input id="hardware-capabilities" value={capabilities} onChange={(e) => setCapabilities(e.target.value)} /></div>
       </div>
-      <p className="help mb-4">Use one currency throughout this project. Port counts describe capacity per hardware unit.</p>
+      <p className="help mb-4">Use one currency throughout this project. Port counts describe capacity per hardware unit. Compatibility checks recognize explicit tags such as role:switch, media:copper, mode:trunk, and speed:1gbps. Other text is descriptive; missing tags mean unknown support.</p>
     </EditorForm>
   </section>
 }

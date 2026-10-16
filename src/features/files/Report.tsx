@@ -52,8 +52,8 @@ export function Report({ project, tiled }: { project: Project; tiled: boolean })
     <section className="report-section" aria-labelledby="report-overview"><h2 id="report-overview">1. Overview, assumptions, and unresolved checks</h2>
       <p>Devices: {project.devices.length}; ports: {project.ports.length}; cables: {project.links.length}; subnets: {project.subnets.length}; VLANs: {project.vlans.length}; notes: {project.notes.length}; implementation tasks: {project.checklistItems.length}.</p>
       <h3>Assumptions</h3><ul>{reportAssumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>
-      <h3>Unresolved checks ({issues.length})</h3>{issues.length ? <ul>{issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul> : <p>No issues were found by the current address, reference, logical, and hardware checks.</p>}
-      <p>Broader network validation is planned for Phase 5. A clean report does not verify deployed configuration.</p>
+      <h3>Unresolved checks ({issues.length})</h3>{issues.length ? <ul>{issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul> : <p>No issues were found by the current project checks.</p>}
+      <p>These are the same checks shown in Issues. A clean report does not verify deployed configuration.</p>
     </section>
     <section className="report-section" aria-labelledby="report-physical"><h2 id="report-physical">2. Physical topology</h2><Diagram project={project} kind="physical" tiled={tiled} />
       <ReportTable caption="Devices" headers={['Device', 'Role', 'Site / scope', 'Notes']} rows={project.devices.map((device) => [device.name, device.role, device.scope, device.notes || 'None'])} />

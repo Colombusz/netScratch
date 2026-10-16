@@ -1,6 +1,6 @@
 # netScratch
 
-A browser-based network planning workspace with IPv4 calculations, subnet planning, physical and logical topology, VLANs, inventory, notes, browser saving, JSON project files, and print/PDF reports. Phase 4 is implemented. No account, backend, API key, or environment file is needed.
+A browser-based network planning workspace with IPv4 calculations, subnet planning, physical and logical topology, VLANs, inventory, notes, browser saving, JSON project files, print/PDF reports, and project issues. All six implementation phases are included. Optional Supabase accounts add private cloud project copies. Local work needs no account, backend, API key, or environment file.
 
 ## Run
 
@@ -27,7 +27,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Vitest covers networking math, VLSM allocation, project transactions, graph derivation, schemas, JSON validation, migration, and persistence/recovery behavior. Playwright checks the complete workspaces plus reload restoration, downloads, file imports, corrupt-save recovery, failed storage, two-tab conflicts, and real PDF output. It also checks keyboard navigation, responsive layouts, both themes, and axe accessibility. Browser tests start and stop their own Vite server on port 4173. Screenshots, JSON downloads, and report PDFs are written to `test-results/`.
+Vitest covers networking math, VLSM allocation, project transactions, undo/redo, graph derivation, schemas, issue rules, JSON validation, and persistence/recovery. Database tests execute the SQL migration in PGlite (Postgres), testing two-user isolation, anonymous denial, ownership and revision protection, and stale updates/deletes. Playwright checks every workspace, reload restoration, files, conflicts, real PDFs, and the real Supabase SDK against controlled HTTP responses. Live email delivery and hosted Supabase configuration are separate deployment checks. Browser tests also check keyboard navigation, responsive layouts, both themes, and axe accessibility. Their Vite server runs on port 4173; artifacts are written to `test-results/`.
 
 ## Included
 
@@ -45,6 +45,33 @@ Vitest covers networking math, VLSM allocation, project transactions, graph deri
 - Logical integration: single/range VLAN creation, unassigned subnet/interface visibility, matching membership handles, node inspection, and saved mouse/keyboard positions independent of Physical.
 - Project files: committed changes saved in this browser, previous-save backup and unreadable-save recovery, validated JSON import/export, and explicit conflict resolution when another tab changes the save.
 - Print report: seven ordered sections, selectable SVG diagrams from project data and positions, repeated table headings, and optional diagrams enlarged across four pages each.
+- Issues: live severity/category/search filters, stable findings and affected-item links, with the same checks in the print report.
+- Address spaces: create, rename, switch, and delete routing scopes in Planner; attached writing survives deletion.
+- Port configuration: access, trunk, routed, and unused modes with access/trunk VLAN selection.
+- Undo/redo: up to 50 committed document transactions, including cascading deletions, in the current session.
+- Optional cloud: Supabase email accounts and password recovery; private project list, explicit save, open, independent copy, deletion, and revision conflicts.
+
+## Issues and repair
+
+Open **08 Issues** to review errors and warnings. Search by message, rule code, or entity name; filter severity or category. Each affected-item button opens its editor. Findings update when changes are applied and the print report uses the same `collectIssues()` function.
+
+Checks cover subnet invariants and overlaps, duplicate interface IPv4 addresses within a routing scope, host addresses/prefixes, reserved ranges, VLAN numbers and assignments, port modes, interface/port consistency, cable occupancy/media/speeds/VLANs, stock, port capacity, and explicit hardware compatibility declarations. A subnet gateway may be assigned to its router interface without being treated as a duplicate reservation. Device scope matches address-space scope exactly and is the routing domain for IP uniqueness. Separate scopes can reuse addresses.
+
+Hardware capability tags such as `role:switch`, `media:copper`, `mode:trunk`, and `speed:1gbps` declare supported values. Values within a tag group are alternatives; device allocations and an assigned model contribute their declarations. Free text remains descriptive. Missing groups mean unknown support. Recognized speed differences are warnings because negotiation depends on actual equipment. Checks do not simulate routing or guarantee deployment correctness.
+
+## Undo and redo
+
+Use the sidebar **Undo** and **Redo** buttons, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, or Ctrl/Cmd+Y. Text inputs retain their browser-native undo behavior. History covers committed document actions, including plan generation, layout moves, and cascaded deletion. A new edit clears redo. Opening/importing/recovering a different document resets history; reloading also starts a new session. History is not included in exported JSON or cloud documents. Undo/redo commits save through the usual browser-saving path and reset unapplied form drafts.
+
+## Optional cloud accounts and projects
+
+Open **09 Cloud** and configure your Supabase project URL and public publishable/legacy anon key. Public connection details and SDK authentication sessions are stored in this browser. Secret/service-role keys are rejected. No env-file edits are needed. Apply [the database migration and setup instructions](supabase/README.md) to your own Supabase project first; this repository does not provision or deploy an external service.
+
+Create an email account, confirm it if your provider requires confirmation, and sign in. Password reset links return to this app using PKCE. Cloud projects belong to the authenticated user and are protected by database row-level security. List operations fetch metadata; opening validates the full document before replacing the browser project, with confirmation.
+
+**Save project to cloud** creates a record or conditionally updates the revision opened/saved during this session. A changed or removed remote revision causes a conflict and preserves local work. Refresh the list and open the current cloud version, or **Save as new cloud copy** to preserve an independent version. Unknown existing IDs are never silently upserted. Reopening the app keeps your SDK session but requires opening an existing cloud document before updating it. Deletion also checks the listed revision and keeps the open browser project.
+
+Cloud saving is explicit; local committed changes continue to autosave in the browser. There is no background synchronization or collaboration merge. Service failures leave local edits and JSON export available. Signing out/disconnecting keeps the open document and browser backups; clear local site data on a shared device when finished. Cloud documents are limited to 20 MiB and project names to 1,000 characters. Database tests use Postgres with an emulated Supabase auth schema; browser tests use controlled service responses. Production email, redirect allowlists, and a hosted migration require the actual Supabase project.
 
 ## Browser saving and project files
 
@@ -70,7 +97,7 @@ In **07 Files**, review the report preview and choose **Print / save PDF**. Use 
 6. Port, interface, and cable schedules.
 7. Notes and implementation checklist.
 
-Diagrams are SVG with selectable text, using saved positions or the existing default layout. Full labels and details appear in the tables. A large plan can enable **Enlarge diagrams across four pages each** for a two-by-two tile layout per diagram. The report uses a light paper surface in either app theme. Printed tables repeat their headings and long writing wraps across pages. The unresolved list aggregates current address, reference, logical, and hardware checks; it is not the comprehensive Phase 5 validator.
+Diagrams are SVG with selectable text, using saved positions or the existing default layout. Full labels and details appear in the tables. A large plan can enable **Enlarge diagrams across four pages each** for a two-by-two tile layout per diagram. The report uses a light paper surface in either app theme. Printed tables repeat their headings and long writing wraps across pages. The unresolved list uses the same errors and warnings as Issues.
 
 ## Notes and checklist behavior
 
@@ -90,13 +117,13 @@ Open **05 Inventory**, add a model, then allocate units to a device or site. Dev
 
 Allocations may exceed available stock so a plan can include purchases. The balance and hardware issues identify the missing quantity. Allocated cost includes these planned units. All costs use the entered prices in one user-chosen currency; the project does not store or convert currencies.
 
-Port demand counts a device's named physical ports. Supply sums `quantity × ports per unit` for all allocations to that device. Devices without allocations are marked unassigned. These checks compare counts only; media, speed, and capability compatibility are not checked.
+Port demand counts a device's named physical ports. Supply sums `quantity × ports per unit` for all allocations to that device. Devices without allocations are marked unassigned. The Inventory table compares counts; Issues also checks declared media, speed, role, and mode compatibility.
 
 Edits preserve entity IDs. Deleting a device also removes its device allocations; site allocations remain. Hardware and allocations share the same in-memory project as the planner and topology views.
 
-## Phase 1 assumptions and limits
+## Planning assumptions and limits
 
-- The planner initializes from the first saved address space and can select other imported address spaces. Scope-aware overlap checks support multiple address spaces; new-space creation beyond the initial planner space remains outside this phase.
+- The planner initializes from the first saved address space and can create, rename, select, and delete other spaces. Subnet overlap checks apply across address spaces sharing a routing scope.
 - One usable address selects /32, two select /31, and larger requests select the smallest block after excluding network and broadcast addresses. Requirements include the gateway. /31 is intended for point-to-point links.
 - The calculator accepts a host address and normalizes the network. Planner inputs must already be aligned; invalid input produces the correct network suggestion.
 - The initial Staff/Admin/Guests requirements are the example from the build brief. They are editable drafts until Generate subnets is pressed.
@@ -106,7 +133,7 @@ Edits preserve entity IDs. Deleting a device also removes its device allocations
 - Project names commit on Enter or blur. Network proposals commit through their explicit Apply or Generate action.
 - Applied project changes persist in browser storage when writes succeed. Unapplied form drafts remain temporary. The current save status and recovery controls identify when saving is paused or unavailable.
 - Schema version 1 is the first released format. The migration entry point validates and clones version 1, rejects missing/invalid versions, and rejects newer versions with an update message. There is no invented legacy format to migrate yet; add sequential migrations when version 2 is introduced.
-- Schemas validate document shape. Planning checks cover CIDRs, capacities, gateways, parent containment, and subnet overlaps within a routing scope. Hardware checks report stock and port shortages. A unified issues view and additional topology, IP, VLAN, and compatibility checks remain for Phase 5.
+- Schemas validate document shape. Planning transactions reject invalid address allocations. Broader issues remain visible and repairable without blocking incomplete plans or planned purchases.
 
 ## Structure
 
@@ -118,7 +145,8 @@ src/
     schema.ts                Zod schemas, inferred types, empty project
     migrations.ts            Version-aware document validation
     document.ts              JSON round-tripping, references, and import errors
-    report.ts                Available report checks and assumptions
+    issues.ts                Shared structured network findings and entity targets
+    report.ts                Report issue formatting and assumptions
     planning.ts              Atomic subnet edits and generation
     topology.ts              Device, port, and cable transactions
     logical.ts               VLAN and interface transactions
@@ -128,6 +156,7 @@ src/
   state/projectStore.ts      Project document and editing actions
   state/persistenceStore.ts  Browser save status and startup subscription
   storage/                   Local save, backup/recovery, and downloads
+  cloud/                     Optional Supabase client, project repository, SQL tests
   features/
     calculator/Calculator.tsx
     planner/Planner.tsx
@@ -136,17 +165,20 @@ src/
     inventory/               Hardware, allocations, and capacity checks
     notes/                   Notes, implementation checklist, and filters
     files/                   Project JSON, print report, and SVG diagrams
+    issues/                  Search/filter findings and open affected editors
+    cloud/                   Account, password recovery, and cloud project controls
   App.tsx                    Workspace shell and navigation
   main.tsx
   styles.css                 Tailwind and shared UI rules
 tests/                       Workspace, file/recovery, and print acceptance tests
+supabase/                    Database migration and deployment instructions
 vite.config.ts
 playwright.config.ts
 ```
 
 `src/core` imports only Zod and other core modules. It never imports React, Zustand, storage, or cloud code. All IPv4 operations use exact arithmetic within JavaScript's safe integer range, avoiding signed 32-bit bitwise conversions. Free space is represented as aligned CIDR blocks; allocation never enumerates individual IP addresses.
 
-`src/storage` handles local browser storage. Cloud code and SQL migrations remain later work; no Supabase dependency is installed.
+`src/storage` handles local browser storage. Optional Supabase code is loaded in a separate cloud chunk. Cloud code never enters the pure networking core. The SQL migration uses per-owner policies, restricted column grants, an owner/date index, and server-maintained revisions.
 
 ## Dependency references
 
@@ -156,9 +188,7 @@ Inventory forms use controlled inputs and entity keys following [React's state-r
 
 Logical canvas repairs follow the [React Flow custom-node types](https://reactflow.dev/api-reference/types/node-props), [handle identifiers](https://reactflow.dev/learn/customization/handles), and [node-change API](https://reactflow.dev/api-reference/types/node-change). Node dimensions and handles remain view data; the document stores only positions.
 
-## Next work
-
-Phase 5 adds a unified issues workspace with entity links and broader topology, address, VLAN, and hardware validation. The Phase 4 report already exposes the existing check results; additional network rules and repair/navigation flows should build on those core checks.
+Cloud implementation follows [Supabase password authentication](https://supabase.com/docs/guides/auth/passwords), [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security), and the installed SDK's conditional-update API. Migration tests use [PGlite's Postgres API](https://pglite.dev/docs/api).
 
 ## Manual acceptance checks
 

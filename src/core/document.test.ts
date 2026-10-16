@@ -10,7 +10,7 @@ function fixture(): Project {
   project.subnets = [{ id: 'subnet', name: 'Staff', addressSpaceId: 'space', cidr: '10.0.0.0/25', hostRequirement: 100, status: 'allocated', source: 'manual', gatewayIp: '10.0.0.1', vlanId: 'vlan', notes: 'Keep gateway' }]
   project.vlans = [{ id: 'vlan', name: 'Staff', number: 10 }]
   project.devices = [{ id: 'device', name: 'Core', role: 'switch', hardwareItemId: 'hardware', scope: 'HQ', notes: 'Device note' }, { id: 'device2', name: 'Edge', role: 'router', hardwareItemId: null, scope: 'HQ', notes: '' }]
-  project.ports = ['port1', 'port2'].map((id, index) => ({ id, deviceId: index ? 'device2' : 'device', name: 'eth0', speed: '1 Gbps', media: 'copper', mode: 'access', accessVlanId: 'vlan', trunkVlanIds: ['vlan'] }))
+  project.ports = ['port1', 'port2'].map((id, index) => ({ id, deviceId: index ? 'device2' : 'device', name: 'eth0', speed: '1 Gbps', media: 'copper', mode: 'access', accessVlanId: 'vlan', trunkVlanIds: [] }))
   project.interfaces = [{ id: 'iface', deviceId: 'device', name: 'LAN', kind: 'physical', portId: 'port1', vlanId: 'vlan', address: '10.0.0.1/25' }]
   project.links = [{ id: 'link', sourcePortId: 'port1', targetPortId: 'port2', label: 'Uplink', cableType: 'Cat6' }]
   project.hardwareItems = [{ id: 'hardware', model: 'Switch model', category: 'Switch', portCount: 24, quantityAvailable: 1, unitCost: 125.5, capabilities: ['VLANs'] }]

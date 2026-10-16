@@ -6,6 +6,11 @@ export const portDetailsSchema = portSchema.pick({ name: true, speed: true, medi
   name: z.string().trim().min(1, 'Give the port a name.'),
   speed: z.string().trim().min(1, 'Enter the port speed.'),
 })
+export const portConfigurationSchema = portDetailsSchema.extend({
+  mode: portSchema.shape.mode.optional(),
+  accessVlanId: portSchema.shape.accessVlanId.optional(),
+  trunkVlanIds: portSchema.shape.trunkVlanIds.optional(),
+})
 export const bulkPortsSchema = z.strictObject({
   prefix: z.string().trim().min(1, 'Enter a prefix, such as Gi0/.'),
   start: z.number().int().min(0).max(65535),
@@ -20,6 +25,7 @@ export const cableDetailsSchema = linkSchema.pick({ sourcePortId: true, targetPo
 export const positionSchema = z.strictObject({ x: z.number(), y: z.number() })
 export type DeviceDetails = z.infer<typeof deviceDetailsSchema>
 export type PortDetails = z.infer<typeof portDetailsSchema>
+export type PortConfiguration = z.infer<typeof portConfigurationSchema>
 export type BulkPorts = z.infer<typeof bulkPortsSchema>
 export type CableDetails = z.infer<typeof cableDetailsSchema>
 export type Position = z.infer<typeof positionSchema>
@@ -82,11 +88,15 @@ export function addBulkPorts(project: Project, deviceId: string, input: BulkPort
   return addPorts(project, deviceId, Array.from({ length: count }, (_, index) => ({ name: `${prefix}${start + index}`, speed, media })))
 }
 
-export function updatePort(project: Project, id: string, input: PortDetails): Project {
+export function updatePort(project: Project, id: string, input: PortConfiguration): Project {
   const port = requirePort(project, id)
-  const details = portDetailsSchema.parse(input)
+  const details = portConfigurationSchema.parse(input)
+  const mode = details.mode ?? port.mode
+  const accessVlanId = mode === 'access' ? details.accessVlanId === undefined ? port.accessVlanId : details.accessVlanId : null
+  const trunkVlanIds = mode === 'trunk' ? [...new Set(details.trunkVlanIds ?? port.trunkVlanIds)] : []
+  for (const vlanId of [accessVlanId, ...trunkVlanIds]) if (vlanId && !project.vlans.some((v) => v.id === vlanId)) throw new Error('VLAN not found.')
   if (project.ports.some((p) => p.deviceId === port.deviceId && p.id !== id && p.name === details.name)) throw new Error(`Port ${details.name} already exists on this device.`)
-  return changed(project, { ports: project.ports.map((p) => p.id === id ? { ...p, ...details } : p) })
+  return changed(project, { ports: project.ports.map((p) => p.id === id ? { ...p, ...details, mode, accessVlanId, trunkVlanIds } : p) })
 }
 
 export function connectionError(project: Pick<Project, 'ports' | 'links'>, sourcePortId: string, targetPortId: string, exceptLinkId?: string): string | null {
@@ -114,7 +124,7 @@ function removeEntities(project: Project, devices: Set<string>, ports: Set<strin
     const { attachedTo: _attachment, ...rest } = item
     return rest as T
   }
-  const cleanPositions = (positions: Record<string, Position>) => Object.fromEntries(Object.entries(positions).filter(([id]) => !removed.has(id)))
+  const cleanPositions = (positions: Record<string, Position>) => Object.fromEntries(Object.entries(positions).filter(([id]) => !removed.has(id) && !interfaces.has(id.replace(/^iface:/, ''))))
   return changed(project, {
     devices: project.devices.filter((d) => !devices.has(d.id)), ports: project.ports.filter((p) => !ports.has(p.id)),
     links: project.links.filter((link) => !links.has(link.id)), interfaces: project.interfaces.filter((i) => !interfaces.has(i.id)),

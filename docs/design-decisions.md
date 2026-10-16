@@ -71,3 +71,24 @@ Reading this as a project-file workspace and printable network plan in the estab
 - Assets and motion: no new raster asset, illustration, icon library, or decorative animation is needed. SVG diagrams are representations of the user's project data.
 
 Phase 4 evidence and the full delivery gate are recorded in `phase-4-verification.md`.
+
+## Issues, history, and optional cloud projects
+
+Reading this as a network review and project-management workspace for engineers, extending the existing utility language. Dials: ENERGY 1 / RHYTHM 1 / MOTION 1.
+
+- Issues use a severity-first list because review order and repair instructions matter more than decorative metrics.
+- Severity includes text and uses the established error color; warnings use ordinary text so color is never the only signal.
+- Entity buttons name the affected interface, port, subnet, or model because users need to know which editor will open.
+- Search, severity, and category controls share one desktop row and stack on mobile so filtering remains usable at narrow widths and enlarged text.
+- The report calls the same pure issue engine because printed checks must agree with the workspace.
+- Port modes expose only their relevant VLAN controls, and subnet VLANs are editable beside addressing fields, so issue links lead to usable repairs.
+- Address-space controls stay above the existing planner because routing scope changes the meaning of every allocation below it.
+- Undo/redo sits in the persistent navigation because it acts on whole project transactions across all workspaces.
+- Cloud follows the existing form/panel system: account identity precedes the project list because remote actions must show their owner.
+- Explicit cloud saves and visible revision conflicts keep local/browser state usable during service failures and prevent silent remote overwrites.
+- Cloud connection details are entered in the app to honor the session's env-file restriction and keep cloud use optional.
+- The SDK loads separately because local calculation and planning do not require authentication code.
+- Typography uses the existing system font; network addresses retain the established numeric treatment. No new visual asset, icon library, background texture, or animation is needed.
+- Existing neutral surfaces, teal actions, spacing, borders, and theme tokens keep both workspaces consistent with the earlier phases.
+
+Final requirements, test evidence, and the full antislop delivery gate are recorded in `remaining-phases-verification.md`. Supabase activation instructions are tracked in `../supabase/README.md`.

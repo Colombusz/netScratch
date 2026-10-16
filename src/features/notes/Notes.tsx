@@ -92,7 +92,7 @@ export function Notes() {
   }
 
   function remove(kind: 'note' | 'task', id: string) {
-    if (!window.confirm(`Delete this ${kind}? Related notes and tasks will remain unattached. This cannot be undone in this session.`)) return
+    if (!window.confirm(`Delete this ${kind}? Related notes and tasks will remain unattached. You can undo this change during this session.`)) return
     try {
       if (kind === 'note') removeNote(id)
       else removeTask(id)

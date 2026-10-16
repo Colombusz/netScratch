@@ -14,6 +14,19 @@ function office() {
 }
 
 describe('physical topology transactions', () => {
+  it('configures access/trunk/routed modes, rejects unknown VLANs, and clears irrelevant assignments', () => {
+    let project = office()
+    project.vlans = [{ id: 'vlan', name: 'Staff', number: 10 }]
+    const port = project.ports[0]!
+    project = updatePort(project, port.id, { name: port.name, speed: port.speed, media: port.media, mode: 'trunk', trunkVlanIds: ['vlan', 'vlan'] })
+    expect(project.ports[0]).toMatchObject({ mode: 'trunk', accessVlanId: null, trunkVlanIds: ['vlan'] })
+    project = updatePort(project, port.id, { name: port.name, speed: port.speed, media: port.media, mode: 'access', accessVlanId: 'vlan' })
+    expect(project.ports[0]).toMatchObject({ mode: 'access', accessVlanId: 'vlan', trunkVlanIds: [] })
+    expect(updatePort(project, port.id, { name: port.name, speed: port.speed, media: port.media }).ports[0]!.accessVlanId).toBe('vlan')
+    expect(() => updatePort(project, port.id, { name: port.name, speed: port.speed, media: port.media, mode: 'access', accessVlanId: 'missing' })).toThrow('VLAN not found')
+    project = updatePort(project, port.id, { name: port.name, speed: port.speed, media: port.media, mode: 'routed' })
+    expect(project.ports[0]).toMatchObject({ mode: 'routed', accessVlanId: null, trunkVlanIds: [] })
+  })
   it('creates devices and ports with stable IDs, independent of editable labels', () => {
     const project = office()
     expect(projectSchema.parse(project)).toEqual(project)

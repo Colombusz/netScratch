@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { z } from 'zod'
 import { parseNetwork } from '../../core/cidr'
-import { applyPlan, generatePlan } from '../../core/planning'
+import { applyPlan, deleteAddressSpace, generatePlan } from '../../core/planning'
 import { addressSpaceSchema, type AddressSpace, type Subnet } from '../../core/schema'
 import { freeSpace, requirementSchema } from '../../core/vlsm'
 import { useProjectStore } from '../../state/projectStore'
@@ -13,17 +13,20 @@ const exampleRows = (): DraftRequirement[] => [['Staff', '100'], ['Admin', '50']
 const message = (cause: unknown) => cause instanceof z.ZodError
   ? cause.issues.map((i) => `${i.path.join('.') || 'Input'}: ${i.message}`).join('\n') : (cause as Error).message
 
-export function Planner() {
+export function Planner({ target }: { target?: { entityType: string; id: string } }) {
   const project = useProjectStore((s) => s.project)
   const replaceProject = useProjectStore((s) => s.replaceProject)
-  const [spaceId, setSpaceId] = useState(() => project.addressSpaces[0]?.id ?? crypto.randomUUID())
-  const [parent, setParent] = useState(() => project.addressSpaces[0]?.parentCidr ?? '192.168.10.0/24')
-  const [scope, setScope] = useState(() => project.addressSpaces[0]?.scope ?? 'Main site')
-  const [rows, setRows] = useState<DraftRequirement[]>(() => project.addressSpaces.length ? project.subnets.filter((subnet) => subnet.addressSpaceId === project.addressSpaces[0]!.id && subnet.status === 'allocated').map((subnet) => ({ id: subnet.id, name: subnet.name, hosts: String(subnet.hostRequirement) })) : exampleRows())
+  const initialSubnet = target?.entityType === 'subnet' ? project.subnets.find((s) => s.id === target.id) : undefined
+  const initialSpace = project.addressSpaces.find((s) => s.id === (initialSubnet?.addressSpaceId ?? target?.id)) ?? project.addressSpaces[0]
+  const [spaceId, setSpaceId] = useState(() => initialSpace?.id ?? crypto.randomUUID())
+  const [parent, setParent] = useState(() => initialSpace?.parentCidr ?? '192.168.10.0/24')
+  const [scope, setScope] = useState(() => initialSpace?.scope ?? 'Main site')
+  const [spaceName, setSpaceName] = useState(() => initialSpace?.name ?? 'Primary address space')
+  const [rows, setRows] = useState<DraftRequirement[]>(() => initialSpace ? project.subnets.filter((subnet) => subnet.addressSpaceId === initialSpace.id && subnet.status === 'allocated').map((subnet) => ({ id: subnet.id, name: subnet.name, hosts: String(subnet.hostRequirement) })) : exampleRows())
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
   const [failures, setFailures] = useState<string[]>([])
-  const [editing, setEditing] = useState<Subnet | null>(null)
+  const [editing, setEditing] = useState<Subnet | null>(initialSubnet ?? null)
   const [dirty, setDirty] = useState(false)
   const committed = project.addressSpaces.find((s) => s.id === spaceId)
   const subnets = project.subnets.filter((s) => s.addressSpaceId === spaceId)
@@ -33,7 +36,7 @@ export function Planner() {
   const fixedIds = new Set(subnets.filter((s) => s.source === 'manual' || s.status === 'reserved').map((s) => s.id))
 
   function readSpace(): AddressSpace {
-    return addressSpaceSchema.parse({ id: spaceId, name: committed?.name ?? 'Primary address space', parentCidr: parseNetwork(parent).cidr, scope })
+    return addressSpaceSchema.parse({ id: spaceId, name: spaceName, parentCidr: parseNetwork(parent).cidr, scope })
   }
 
   function updateRow(id: string, values: Partial<DraftRequirement>) {
@@ -112,23 +115,34 @@ export function Planner() {
         <h1>Subnet planner</h1>
         <p>Allocate the largest networks first. Keep room for what comes next.</p>
       </header>
-      {project.addressSpaces.length > 1 && <div className="field"><label htmlFor="edit-address-space">Edit address space</label><select id="edit-address-space" value={spaceId} onChange={(event) => {
+      <div className="flex flex-wrap gap-2 mb-4"><button type="button" onClick={() => {
+        if ((dirty || editing || committed && (parent !== committed.parentCidr || scope !== committed.scope || spaceName !== committed.name)) && !window.confirm('Discard pending planner edits and create another address space?')) return
+        setSpaceId(crypto.randomUUID()); setSpaceName('New address space'); setParent('10.0.0.0/24'); setScope('Main site'); setRows([]); setEditing(null); setDirty(false); setError(''); setFeedback('Apply the parent block to add this address space.'); setFailures([])
+      }}>New address space</button>{committed && <button type="button" onClick={() => {
+        if (!window.confirm(`Delete ${committed.name} and its ${subnets.length} subnets? Attached writing will be kept. You can undo this change during this session.`)) return
+        const next = deleteAddressSpace(project, committed.id); replaceProject(next)
+        const first = next.addressSpaces[0]
+        setSpaceId(first?.id ?? crypto.randomUUID()); setSpaceName(first?.name ?? 'Primary address space'); setParent(first?.parentCidr ?? '192.168.10.0/24'); setScope(first?.scope ?? 'Main site')
+        setRows(next.subnets.filter((s) => s.addressSpaceId === first?.id && s.status === 'allocated').map((s) => ({ id: s.id, name: s.name, hosts: String(s.hostRequirement) }))); setEditing(null); setDirty(false); setError(''); setFailures([]); setFeedback('Address space deleted. Related notes and tasks were preserved.')
+      }}>Delete address space</button>}</div>
+      {(project.addressSpaces.length > 1 || !committed && project.addressSpaces.length > 0) && <div className="field"><label htmlFor="edit-address-space">Edit address space</label><select id="edit-address-space" value={spaceId} onChange={(event) => {
         const space = project.addressSpaces.find((entry) => entry.id === event.target.value)!
-        if ((dirty || editing || committed && (parent !== committed.parentCidr || scope !== committed.scope)) && !window.confirm('Discard pending planner edits and switch address spaces?')) return
-        setSpaceId(space.id); setParent(space.parentCidr); setScope(space.scope)
+        if ((dirty || editing || committed && (parent !== committed.parentCidr || scope !== committed.scope || spaceName !== committed.name)) && !window.confirm('Discard pending planner edits and switch address spaces?')) return
+        setSpaceId(space.id); setParent(space.parentCidr); setScope(space.scope); setSpaceName(space.name)
         setRows(project.subnets.filter((subnet) => subnet.addressSpaceId === space.id && subnet.status === 'allocated').map((subnet) => ({ id: subnet.id, name: subnet.name, hosts: String(subnet.hostRequirement) })))
         setDirty(false); setEditing(null); setError(''); setFeedback(''); setFailures([])
-      }}>{project.addressSpaces.map((space) => <option key={space.id} value={space.id}>{space.name} ({space.parentCidr}, {space.scope})</option>)}</select></div>}
+      }}>{!committed && <option value={spaceId}>New address space (pending)</option>}{project.addressSpaces.map((space) => <option key={space.id} value={space.id}>{space.name} ({space.parentCidr}, {space.scope})</option>)}</select></div>}
       <form onSubmit={generate} noValidate>
         <section className="panel" aria-labelledby="parent-title">
           <h2 id="parent-title">Parent address space</h2>
+          <div className="field mt-4"><label htmlFor="address-space-name">Address space name</label><input id="address-space-name" value={spaceName} onChange={(e) => { setSpaceName(e.target.value); setFeedback('') }} /></div>
           <div className="parent-fields mt-4">
             <div><label htmlFor="parent-cidr">Parent block</label><input id="parent-cidr" className="address mt-2" value={parent} onChange={(e) => { setParent(e.target.value); setFeedback('') }} spellCheck={false} /></div>
             <div><label htmlFor="scope">Routing scope</label><input id="scope" className="mt-2" value={scope} onChange={(e) => { setScope(e.target.value); setFeedback('') }} /></div>
             <button type="button" onClick={applyParent}>Apply parent</button>
           </div>
           <p className="help mt-3">Use an aligned network address. Ranges within this scope must not overlap.</p>
-          {committed && (parent !== committed.parentCidr || scope !== committed.scope) && <p className="notice mt-3">Parent changes are pending. The table and free space still show the applied plan.</p>}
+          {committed && (parent !== committed.parentCidr || scope !== committed.scope || spaceName !== committed.name) && <p className="notice mt-3">Parent changes are pending. The table and free space still show the applied plan.</p>}
         </section>
         <section className="panel" aria-labelledby="requirements-title">
           <div className="section-heading"><h2 id="requirements-title">Segment requirements</h2><button type="button" onClick={() => { setRows((current) => [...current, { id: crypto.randomUUID(), name: '', hosts: '' }]); setDirty(true); setFeedback('') }}>Add segment</button></div>
@@ -181,7 +195,7 @@ export function Planner() {
         <p className="help">A requirement of 2 uses /31 for a point-to-point link. A requirement of 1 uses /32.</p>
         <hr />
         <h3>Manual changes</h3><p>Select Edit on a subnet to adjust its CIDR, gateway, requirement, or status. Overlaps and out-of-range addresses are rejected.</p>
-        <p className="help">This phase edits one address space. Additional topology and VLAN controls come in later phases.</p>
+        <p className="help">Each address space has a routing scope. Use separate scopes when the same address ranges serve independent networks. Assign subnet VLANs in the subnet inspector or Logical workspace.</p>
       </>}
     </aside>
   </div>

@@ -9,11 +9,15 @@ import './inventory.css'
 type Editor = { kind: 'hardware'; item?: HardwareItem } | { kind: 'allocation'; allocation?: Allocation }
 const cost = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export function Inventory() {
+export function Inventory({ target }: { target?: { entityType: string; id: string } }) {
   const project = useProjectStore((s) => s.project)
   const removeHardware = useProjectStore((s) => s.deleteHardwareItem)
   const removeAllocation = useProjectStore((s) => s.deleteAllocation)
-  const [editor, setEditor] = useState<Editor | null>(null)
+  const [editor, setEditor] = useState<Editor | null>(() => {
+    const item = project.hardwareItems.find((h) => target?.entityType === 'hardwareItem' && h.id === target.id)
+    const allocation = project.allocations.find((a) => target?.entityType === 'allocation' && a.id === target.id)
+    return item ? { kind: 'hardware', item } : allocation ? { kind: 'allocation', allocation } : null
+  })
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const trigger = useRef<HTMLButtonElement | null>(null)
@@ -36,7 +40,7 @@ export function Inventory() {
   }
 
   function remove(kind: 'hardware' | 'allocation', id: string, label: string) {
-    if (!window.confirm(`Delete ${label}? This cannot be undone in this session.`)) return
+    if (!window.confirm(`Delete ${label}? You can undo this change during this session.`)) return
     try {
       if (kind === 'hardware') removeHardware(id)
       else removeAllocation(id)
@@ -83,7 +87,7 @@ export function Inventory() {
     </section>
     <section className="panel" aria-labelledby="ports-title">
       <h2 id="ports-title">Device port capacity</h2>
-      <p className="help mb-4">Demand counts named ports in Physical. Supply sums ports per unit across all hardware allocated to that device; it does not check speed, media, or capabilities.</p>
+      <p className="help mb-4">Demand counts named ports in Physical. Supply sums ports per unit across all hardware allocated to that device. Open Issues for checks of declared speed, media, and capabilities.</p>
       {!project.devices.length ? <p className="empty-state">Add devices and ports in the Physical workspace to compare port demand with allocated capacity.</p> : <div className="table-scroll" role="region" aria-label="Device port capacity table" tabIndex={0}><table>
         <thead><tr><th scope="col">Device / site</th><th scope="col">Port demand</th><th scope="col">Allocated ports</th><th scope="col">Capacity check</th></tr></thead>
         <tbody>{project.devices.map((device) => {

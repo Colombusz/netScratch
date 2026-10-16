@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { applyPlan, generatePlan, validateSubnets } from './planning'
+import { applyPlan, deleteAddressSpace, generatePlan, validateSubnets } from './planning'
 import { createEmptyProject, type AddressSpace, type Subnet } from './schema'
 
 const space: AddressSpace = { id: 'space', name: 'Office', parentCidr: '192.168.10.0/24', scope: 'HQ' }
 const subnet = (patch: Partial<Subnet> = {}): Subnet => ({ id: 'staff', addressSpaceId: space.id, name: 'Staff', cidr: '192.168.10.0/25', status: 'allocated', hostRequirement: 100, gatewayIp: '192.168.10.1', vlanId: null, source: 'auto', notes: '', ...patch })
 
 describe('project planning transactions', () => {
+  it('deletes one address space atomically, detaches writing, and removes only its logical positions', () => {
+    let project = applyPlan(createEmptyProject(), space, [subnet()])
+    project = applyPlan(project, { ...space, id: 'branch', scope: 'Branch' }, [subnet({ id: 'branch-subnet', addressSpaceId: 'branch' })])
+    project.notes = [{ id: 'note', text: 'Keep', attachedTo: { entityType: 'addressSpace', id: space.id } }, { id: 'unattached', text: 'Project' }]
+    project.checklistItems = [{ id: 'task', task: 'Keep task', status: 'todo', attachedTo: { entityType: 'subnet', id: 'staff' } }]
+    project.layout.logical = { 'subnet:staff': { x: 1, y: 1 }, 'subnet:branch-subnet': { x: 2, y: 2 } }
+    const next = deleteAddressSpace(project, space.id)
+    expect(next.subnets.map((s) => s.id)).toEqual(['branch-subnet'])
+    expect(next.notes[0]!.attachedTo).toBeUndefined(); expect(next.notes[1]).toBe(project.notes[1])
+    expect(next.checklistItems[0]!.attachedTo).toBeUndefined()
+    expect(next.layout.logical).toEqual({ 'subnet:branch-subnet': { x: 2, y: 2 } })
+    expect(project.subnets).toHaveLength(2)
+    expect(() => deleteAddressSpace(project, 'missing')).toThrow('no longer exists')
+    expect(applyPlan(project, space, []).layout.logical).toEqual({ 'subnet:branch-subnet': { x: 2, y: 2 } })
+  })
   it('applies a plan without mutating the prior project', () => {
     const project = createEmptyProject()
     const next = applyPlan(project, space, [subnet()])

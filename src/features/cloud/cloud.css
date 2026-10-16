@@ -1,0 +1,7 @@
+.cloud-workspace { max-width: 68rem; }
+.cloud-workspace form { max-width: 40rem; }
+.cloud-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-block: .8rem; }
+.cloud-project-list { padding: 0; list-style: none; }
+.cloud-project-list > li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--line); }
+.cloud-project-list > li > div { min-width: 0; overflow-wrap: anywhere; }
+.cloud-endpoint { overflow-wrap: anywhere; }
